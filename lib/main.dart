@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -37,10 +36,8 @@ class GameMatch {
   int get total2 => rounds.fold(0, (a, b) => a + b.s2) + (int.tryParse(current2) ?? 0);
 }
 
-// قائمة مباريات الألعاب العادية
 List<GameMatch> soloMatchesList = [];
 
-// إدارة الكروبات
 class GroupData {
   String code;
   String name;
@@ -49,17 +46,14 @@ class GroupData {
 }
 
 class GroupManager {
-  // تخزين الكروبات في قائمة لدعم تكرار نفس الرمز لأسماء مختلفة
   static final List<GroupData> allGroups = [];
   static GroupData? activeGroup;
 
-  // إنشاء كروب مخصص
   static bool createGroupCustom(String name, String customCode) {
     String cleanName = name.trim();
     String cleanCode = customCode.trim();
     if (cleanName.isEmpty || cleanCode.isEmpty) return false;
 
-    // فحص ما إذا كان نفس الاسم ونفس الرمز موجودين معاً
     int idx = allGroups.indexWhere((g) => g.code == cleanCode && g.name == cleanName);
     if (idx != -1) {
       activeGroup = allGroups[idx];
@@ -71,13 +65,11 @@ class GroupManager {
     return true;
   }
 
-  // البحث عن الكروبات المطابقة للرمز
   static List<GroupData> findGroupsByCode(String code) {
     String cleanCode = code.trim();
     return allGroups.where((g) => g.code == cleanCode).toList();
   }
 
-  // الدخول المباشر إذا كان الاسم مطابقاً
   static bool joinGroupByNameAndCode(String code, String name) {
     String cleanCode = code.trim();
     String cleanName = name.trim();
@@ -86,7 +78,6 @@ class GroupManager {
       activeGroup = allGroups[idx];
       return true;
     } else {
-      // إنشاء الكروب بالاسم والرمز المدخلين
       var newG = GroupData(code: cleanCode, name: cleanName);
       allGroups.add(newG);
       activeGroup = newG;
@@ -216,7 +207,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 }
 
 // -------------------------------------------------------------
-// 2. شاشة بوابة الكروب: التحقق من تشابه الرمز وطلب الاسم عند الحاجة
+// 2. بوابة الكروبات
 // -------------------------------------------------------------
 class GroupSelectScreen extends StatefulWidget {
   const GroupSelectScreen({super.key});
@@ -252,10 +243,6 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
     }
 
     GroupManager.createGroupCustom(name, code);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('تم إنشاء الكروب باسم: $name'), duration: const Duration(seconds: 3)),
-    );
-
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const GroupDashboardScreen()),
@@ -271,24 +258,19 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
 
     List<GroupData> matchingGroups = GroupManager.findGroupsByCode(code);
 
-    // الحالة 1: الرمز غير مسجل سابقاً أو مسجل لكروب واحد فقط
     if (matchingGroups.isEmpty) {
-      // كروب جديد تماماً، يطلب تحديد الاسم
       _askForGroupNameDialog(code, 'لم يتم العثور على كروب بهذا الرمز. اكتب اسم الكروب للدخول:');
     } else if (matchingGroups.length == 1) {
-      // كروب واحد فقط يمتلك هذا الرمز -> دخول مباشر
       GroupManager.activeGroup = matchingGroups.first;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const GroupDashboardScreen()),
       );
     } else {
-      // الحالة 2: هناك أكثر من كروب يحملون نفس الرمز بالصدفة -> طلب اسم الكروب للتحديد
-      _askForGroupNameDialog(code, 'تنبيه: يوجد أكثر من كروب بهذا الرمز!\nيرجى كتابة اسم الكروب للدخول إلى مجموعتك:');
+      _askForGroupNameDialog(code, 'يوجد أكثر من كروب بهذا الرمز. يرجى كتابة اسم الكروب:');
     }
   }
 
-  // نافذة طلب اسم الكروب
   void _askForGroupNameDialog(String code, String message) {
     final TextEditingController nameConfirmCtrl = TextEditingController();
     showDialog(
@@ -302,11 +284,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
             const SizedBox(height: 14),
             TextField(
               controller: nameConfirmCtrl,
-              decoration: const InputDecoration(
-                labelText: 'اسم الكروب',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.groups),
-              ),
+              decoration: const InputDecoration(labelText: 'اسم الكروب', border: OutlineInputBorder()),
             ),
           ],
         ),
@@ -334,112 +312,51 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('بوابة الكروبات'),
-        backgroundColor: const Color(0xFF8B1E22),
-        foregroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: const Text('بوابة الكروبات'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
             const Icon(Icons.shield_outlined, size: 64, color: Color(0xFF8B1E22)),
-            const SizedBox(height: 12),
-            const Text(
-              'أنشئ كروب وحدد الرمز السري، أو ادخل إلى كروبك بكتابة الرمز السري الخاص به',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-            const SizedBox(height: 24),
-
-            // إنشاء كروب جديد
+            const SizedBox(height: 16),
             Card(
               elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.group_add, color: Color(0xFF8B1E22)),
-                        SizedBox(width: 8),
-                        Text('دخول كروب جديد', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))),
-                      ],
-                    ),
+                    const Text('دخول كروب جديد', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))),
                     const Divider(height: 18),
-                    TextField(
-                      controller: createNameCtrl,
-                      decoration: const InputDecoration(
-                        hintText: 'اسم الكروب (مثلاً: دوري الأصدقاء)',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.edit),
-                      ),
-                    ),
+                    TextField(controller: createNameCtrl, decoration: const InputDecoration(hintText: 'اسم الكروب', border: OutlineInputBorder())),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: customCodeCtrl,
-                      decoration: const InputDecoration(
-                        hintText: 'اختر رمزاً سرياً (بأي لغة أو أرقام)',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.lock_open),
-                      ),
-                    ),
+                    TextField(controller: customCodeCtrl, decoration: const InputDecoration(hintText: 'الرمز السري المخصص', border: OutlineInputBorder())),
                     const SizedBox(height: 14),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF8B1E22),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
                       onPressed: _handleCreate,
-                      child: const Text('حفظ الكروب ودخول', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      child: const Text('حفظ الكروب ودخول'),
                     ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 20),
-
-            // لديك كروب
             Card(
               elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.vpn_key, color: Colors.black87),
-                        SizedBox(width: 8),
-                        Text('لديك كروب؟ ضع الرمز السري', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
+                    const Text('لديك كروب؟ ضع الرمز السري', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
                     const Divider(height: 18),
-                    TextField(
-                      controller: enterCodeCtrl,
-                      decoration: InputDecoration(
-                        hintText: 'اكتب الرمز السري الخاص بالكروب',
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () => enterCodeCtrl.clear(),
-                        ),
-                      ),
-                    ),
+                    TextField(controller: enterCodeCtrl, decoration: const InputDecoration(hintText: 'اكتب الرمز السري للكروب', border: OutlineInputBorder())),
                     const SizedBox(height: 14),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black87,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, foregroundColor: Colors.white),
                       onPressed: _handleJoin,
-                      child: const Text('دخول للكروب بالرمز السري', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      child: const Text('دخول للكروب بالرمز السري'),
                     ),
                   ],
                 ),
@@ -453,7 +370,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
 }
 
 // -------------------------------------------------------------
-// 3. داخل الكروب: الخيارات الثلاثة (لعبة جديدة / لعبات سابقة / إحصائيات)
+// 3. داخل الكروب
 // -------------------------------------------------------------
 class GroupDashboardScreen extends StatefulWidget {
   const GroupDashboardScreen({super.key});
@@ -472,25 +389,10 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          children: [
-            Text(gName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white)),
-            Text('الرمز السري: $gCode', style: const TextStyle(fontSize: 12, color: Colors.amber)),
-          ],
-        ),
+        title: Text('$gName ($gCode)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white)),
         centerTitle: true,
         backgroundColor: const Color(0xFF8B1E22),
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.copy),
-            tooltip: 'نسخ الرمز السري',
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: gCode));
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ الرمز السري لمشاركته!')));
-            },
-          ),
-        ],
       ),
       body: Center(
         child: Padding(
@@ -500,53 +402,29 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF8B1E22),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 5,
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, padding: const EdgeInsets.all(16)),
                 icon: const Icon(Icons.play_circle_fill, color: Color(0xFFD4AF37)),
                 label: const Text('لعبة جديدة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SetupPlayersScreen(isGroupGame: true)),
-                  ).then((_) => setState(() {}));
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const SetupPlayersScreen(isGroupGame: true))).then((_) => setState(() {}));
                 },
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black87,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, foregroundColor: Colors.white, padding: const EdgeInsets.all(16)),
                 icon: const Icon(Icons.history, color: Colors.amber),
                 label: Text('لعبات سابقة ($matchesCount)', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const PastMatchesScreen(isGroupGame: true)),
-                  ).then((_) => setState(() {}));
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const PastMatchesScreen(isGroupGame: true))).then((_) => setState(() {}));
                 },
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  side: const BorderSide(color: Color(0xFF8B1E22), width: 2),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
+                style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16)),
                 icon: const Icon(Icons.bar_chart, color: Color(0xFF8B1E22)),
                 label: const Text('إحصائيات (لاعب ضد لاعب)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))),
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const HeadToHeadScreen()),
-                  );
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const HeadToHeadScreen()));
                 },
               ),
             ],
@@ -558,7 +436,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 }
 
 // -------------------------------------------------------------
-// الشاشات التكميلية (تحديد اللاعبين، تسجيل النتائج، السجل، والإحصائيات)
+// الشاشات التكميلية
 // -------------------------------------------------------------
 class SetupPlayersScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -573,21 +451,14 @@ class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
 
   @override
   void dispose() {
-    p1.dispose();
-    p2.dispose();
-    p3.dispose();
-    p4.dispose();
+    p1.dispose(); p2.dispose(); p3.dispose(); p4.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isGroupGame ? 'لاعبي مباراة الكروب' : 'تحديد لاعبي الفريقين'),
-        backgroundColor: const Color(0xFF8B1E22),
-        foregroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: Text(widget.isGroupGame ? 'لاعبي مباراة الكروب' : 'تحديد لاعبي الفريقين'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -600,11 +471,7 @@ class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
           TextField(controller: p4, decoration: const InputDecoration(labelText: 'الفريق الثاني - لاعب 2', border: OutlineInputBorder())),
           const SizedBox(height: 24),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF8B1E22),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, padding: const EdgeInsets.all(16)),
             onPressed: () {
               Navigator.pushReplacement(
                 context,
@@ -662,8 +529,7 @@ class _MatchScreenState extends State<MatchScreen> {
 
   @override
   void dispose() {
-    c1.dispose();
-    c2.dispose();
+    c1.dispose(); c2.dispose();
     super.dispose();
   }
 
@@ -678,7 +544,7 @@ class _MatchScreenState extends State<MatchScreen> {
       builder: (ctx) => AlertDialog(
         title: Text('تعديل نتيجة لعبة ${index + 1}', textAlign: TextAlign.center),
         content: Column(
-          mainAxisSize: dynamic,
+          mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: edit1, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: '$t1p1 & $t1p2')),
             const SizedBox(height: 10),
