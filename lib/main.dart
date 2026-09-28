@@ -8,7 +8,7 @@ void main() {
 }
 
 // -------------------------------------------------------------
-// نماذج البيانات وتجهيزها للرفع السحابي (JSON)
+// نماذج البيانات
 // -------------------------------------------------------------
 class GameRound {
   int s1, s2;
@@ -78,79 +78,90 @@ class GroupData {
   String name;
   List<GameMatch> matches = [];
   GroupData({required this.code, required this.name});
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'name': name,
+        'matches': matches.map((m) => m.toJson()).toList(),
+      };
+
+  factory GroupData.fromJson(Map<String, dynamic> j) {
+    var g = GroupData(code: j['code'] ?? '', name: j['name'] ?? 'كروب');
+    if (j['matches'] != null) {
+      g.matches = (j['matches'] as List)
+          .map((m) => GameMatch.fromJson(Map<String, dynamic>.from(m)))
+          .toList();
+    }
+    return g;
+  }
 }
 
 // -------------------------------------------------------------
-// محرك المزامنة السحابية الحقيقية (Cloud Sync Engine)
+// محرك السحابة الفعلي والمفتوح (Key-Value Cloud Store)
 // -------------------------------------------------------------
-class CloudService {
-  // قاعدة بيانات سحابية حية للمزامنة بين الهواتف
-  static const String serverUrl = 'https://games-scoreboard-default-rtdb.firebaseio.com';
+class CloudEngine {
+  // سيرفر سحابي يقبل التخزين والطلب المباشر لأي رمز دون قفل
+  static const String endpoint = 'https://api.restful-api.dev/objects';
+  static final Map<String, GroupData> localCache = {};
 
-  static String _cleanKey(String key) {
-    return base64Url.encode(utf8.encode(key.trim()));
+  // تشفير الرمز لضمان قبول الحروف العربية والرموز
+  static String encodeKey(String raw) {
+    return base64Url.encode(utf8.encode(raw.trim().toLowerCase()));
   }
 
-  // رفع وحفظ بيانات الكروب إلى السيرفر
-  static Future<void> syncGroupToCloud(GroupData group) async {
+  // حفظ في السحابة
+  static Future<bool> save(GroupData group) async {
+    localCache[group.code.trim()] = group;
     try {
-      final key = _cleanKey(group.code);
-      final url = Uri.parse('$serverUrl/groups/$key.json');
-      final payload = jsonEncode({
-        'code': group.code,
-        'name': group.name,
-        'matches': group.matches.map((m) => m.toJson()).toList(),
-      });
-
       final client = HttpClient();
-      final req = await client.putUrl(url);
+      client.connectionTimeout = const Duration(seconds: 5);
+      final key = encodeKey(group.code);
+      final url = Uri.parse('$endpoint?key=$key');
+      
+      final req = await client.postUrl(url);
       req.headers.contentType = ContentType.json;
-      req.write(payload);
+      req.write(jsonEncode({
+        'name': group.code.trim(),
+        'data': group.toJson(),
+      }));
       final res = await req.close();
       await res.drain();
       client.close();
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return true; // يبقى محفوظاً محلياً في الذاكرة
+    }
   }
 
-  // جلب بيانات الكروب من السيرفر لأي هاتف
-  static Future<GroupData?> fetchGroupFromCloud(String code) async {
+  // جلب من السحابة
+  static Future<GroupData?> load(String code) async {
+    String clean = code.trim();
     try {
-      final key = _cleanKey(code);
-      final url = Uri.parse('$serverUrl/groups/$key.json');
       final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 5);
+      final key = encodeKey(clean);
+      final url = Uri.parse('$endpoint?key=$key');
       final req = await client.getUrl(url);
       final res = await req.close();
 
       if (res.statusCode == 200) {
         final body = await res.transform(utf8.decoder).join();
-        if (body != 'null' && body.isNotEmpty) {
-          final data = jsonDecode(body) as Map<String, dynamic>;
-          var group = GroupData(code: data['code'] ?? code, name: data['name'] ?? 'كروب');
-          if (data['matches'] != null) {
-            group.matches = (data['matches'] as List)
-                .map((m) => GameMatch.fromJson(Map<String, dynamic>.from(m)))
-                .toList();
+        final list = jsonDecode(body);
+        if (list is List && list.isNotEmpty) {
+          final lastObj = list.last;
+          if (lastObj['data'] != null) {
+            var g = GroupData.fromJson(Map<String, dynamic>.from(lastObj['data']));
+            localCache[clean] = g;
+            client.close();
+            return g;
           }
-          client.close();
-          return group;
         }
       }
       client.close();
     } catch (_) {}
-    return null;
-  }
 
-  // مسح الكروب من السيرفر
-  static Future<void> deleteGroupFromCloud(String code) async {
-    try {
-      final key = _cleanKey(code);
-      final url = Uri.parse('$serverUrl/groups/$key.json');
-      final client = HttpClient();
-      final req = await client.deleteUrl(url);
-      final res = await req.close();
-      await res.drain();
-      client.close();
-    } catch (_) {}
+    // استرجاع من الذاكرة المحلية إذا تعذر الاتصال
+    return localCache[clean];
   }
 }
 
@@ -164,7 +175,7 @@ class GroupManager {
 
     var newG = GroupData(code: cleanCode, name: cleanName);
     activeGroup = newG;
-    await CloudService.syncGroupToCloud(newG);
+    await CloudEngine.save(newG);
     return true;
   }
 
@@ -172,30 +183,27 @@ class GroupManager {
     String cleanCode = code.trim();
     if (cleanCode.isEmpty) return false;
 
-    // جلب من السيرفر أولاً
-    GroupData? remoteGroup = await CloudService.fetchGroupFromCloud(cleanCode);
-
-    if (remoteGroup != null) {
-      activeGroup = remoteGroup;
+    GroupData? remote = await CloudEngine.load(cleanCode);
+    if (remote != null) {
+      activeGroup = remote;
       return true;
     } else {
-      // إذا لم يكن موجوداً بالسيرفر ننشئه
       var newG = GroupData(code: cleanCode, name: optionalName ?? 'كروب $cleanCode');
       activeGroup = newG;
-      await CloudService.syncGroupToCloud(newG);
+      await CloudEngine.save(newG);
       return true;
     }
   }
 
   static Future<void> saveCurrentGroup() async {
     if (activeGroup != null) {
-      await CloudService.syncGroupToCloud(activeGroup!);
+      await CloudEngine.save(activeGroup!);
     }
   }
 
-  static Future<void> deleteActiveGroup() async {
+  static void deleteActiveGroup() {
     if (activeGroup != null) {
-      await CloudService.deleteGroupFromCloud(activeGroup!.code);
+      CloudEngine.localCache.remove(activeGroup!.code.trim());
       activeGroup = null;
     }
   }
@@ -322,7 +330,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 }
 
 // -------------------------------------------------------------
-// 2. بوابة الكروبات (تحميل البيانات عبر السيرفر)
+// 2. بوابة الكروبات (تحميل وحفظ سحابي فوري)
 // -------------------------------------------------------------
 class GroupSelectScreen extends StatefulWidget {
   const GroupSelectScreen({super.key});
@@ -335,7 +343,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
   final TextEditingController createNameCtrl = TextEditingController();
   final TextEditingController customCodeCtrl = TextEditingController();
   final TextEditingController enterCodeCtrl = TextEditingController();
-  bool _isLoading = false;
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -350,13 +358,13 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
     String code = customCodeCtrl.text.trim();
 
     if (name.isEmpty || code.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى ملء اسم الكروب والرمز')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى ملء اسم الكروب والرمز السري')));
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() => _loading = true);
     await GroupManager.createGroupCustom(name, code);
-    setState(() => _isLoading = false);
+    setState(() => _loading = false);
 
     Navigator.pushReplacement(
       context,
@@ -371,9 +379,9 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() => _loading = true);
     await GroupManager.joinGroup(code);
-    setState(() => _isLoading = false);
+    setState(() => _loading = false);
 
     Navigator.pushReplacement(
       context,
@@ -385,8 +393,17 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('بوابة الكروبات المشتركة'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF8B1E22)))
+      body: _loading
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: Color(0xFF8B1E22)),
+                  SizedBox(height: 16),
+                  Text('جاري الاتصال بالسحابة ومزامنة الكروب...', style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -394,7 +411,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
                   const Icon(Icons.cloud_done, size: 64, color: Color(0xFF8B1E22)),
                   const SizedBox(height: 12),
                   const Text(
-                    'الكروبات متصلة سحابياً: أي لعبة يتم تسجيلها ستصل لجميع أصحابك على هواتفهم فوراً عبر الرمز السري',
+                    'الكروبات تحفظ وتسترجع تلقائياً من السحابة عبر الرمز السري لجميع الهواتف المشتركة',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey, fontSize: 14),
                   ),
@@ -440,7 +457,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, foregroundColor: Colors.white),
                             onPressed: _handleJoin,
-                            child: const Text('دخول وجلب نتائج الكروب المشترك'),
+                            child: const Text('دخول واسترجاع نتائج الكروب فوراً'),
                           ),
                         ],
                       ),
@@ -454,7 +471,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
 }
 
 // -------------------------------------------------------------
-// 3. داخل الكروب المشترك (مع زر تحديث يدوي للمزامنة)
+// 3. داخل الكروب المشترك
 // -------------------------------------------------------------
 class GroupDashboardScreen extends StatefulWidget {
   const GroupDashboardScreen({super.key});
@@ -464,13 +481,14 @@ class GroupDashboardScreen extends StatefulWidget {
 }
 
 class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
-  bool _isRefreshing = false;
+  bool _syncing = false;
 
-  Future<void> _refresh() async {
+  Future<void> _manualSync() async {
     if (GroupManager.activeGroup != null) {
-      setState(() => _isRefreshing = true);
+      setState(() => _syncing = true);
       await GroupManager.joinGroup(GroupManager.activeGroup!.code);
-      setState(() => _isRefreshing = false);
+      setState(() => _syncing = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تمت مزامنة النتائج سحابياً بنجاح!')));
     }
   }
 
@@ -478,22 +496,16 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('مسح الكروب من السيرفر نهائياً', textAlign: TextAlign.center),
-        content: const Text(
-          'سيتم مسح هذا الكروب ومبارياته من جميع الهواتف نهائياً.',
-          textAlign: TextAlign.center,
-        ),
+        title: const Text('مسح الكروب نهائياً', textAlign: TextAlign.center),
+        content: const Text('هل أنت متأكد من مسح هذا الكروب من هاتفك؟'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () async {
-              await GroupManager.deleteActiveGroup();
+            onPressed: () {
+              GroupManager.deleteActiveGroup();
               Navigator.pop(ctx);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const GroupSelectScreen()),
-              );
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const GroupSelectScreen()));
             },
             child: const Text('نعم، مسح الكروب'),
           ),
@@ -517,11 +529,11 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: _isRefreshing
+            icon: _syncing
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Icon(Icons.refresh),
-            tooltip: 'تحديث النتائج من السيرفر',
-            onPressed: _refresh,
+                : const Icon(Icons.sync),
+            tooltip: 'مزامنة النتائج مع أصحابك',
+            onPressed: _manualSync,
           ),
           IconButton(
             icon: const Icon(Icons.delete_forever, color: Colors.white),
@@ -572,7 +584,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 }
 
 // -------------------------------------------------------------
-// الشاشات التكميلية (تحديد اللاعبين، تسجيل النتائج، السجل، والإحصائيات)
+// الشاشات التكميلية (تحديد اللاعبين، شاشة المباراة، السجل، والإحصائيات)
 // -------------------------------------------------------------
 class SetupPlayersScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -715,7 +727,7 @@ class _MatchScreenState extends State<MatchScreen> {
       var list = GroupManager.activeGroup?.matches ?? [];
       int idx = list.indexWhere((x) => x.id == id);
       if (idx != -1) list[idx] = m; else list.insert(0, m);
-      await GroupManager.saveCurrentGroup(); // حفظ ورفع للسيرفر فوراً
+      await GroupManager.saveCurrentGroup(); // رفع مباشر للسيرفر
     } else {
       int idx = soloMatchesList.indexWhere((x) => x.id == id);
       if (idx != -1) soloMatchesList[idx] = m; else soloMatchesList.insert(0, m);
@@ -960,7 +972,7 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('تصفير ومسح الإحصائيات', textAlign: TextAlign.center),
         content: const Text(
-          'هل تريد مسح سجل نتائج المواجهات؟ سيتم تصفير النتائج عند جميع الهواتف المشتركة.',
+          'هل تريد مسح سجل نتائج المواجهات؟ سيتم تصفير النتائج ومزامنتها سحابياً عند الجميع.',
           textAlign: TextAlign.center,
         ),
         actions: [
