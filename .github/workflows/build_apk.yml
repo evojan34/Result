@@ -23,20 +23,10 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Create Complete Android Project & Build
+      - name: Build APK Directly
         run: |
-          mkdir -p /tmp/my_code
-          cp -r . /tmp/my_code/
-          rm -rf *
-          rm -rf .git*
+          # إنشاء مجلدات أندرويد فقط إذا كانت غير موجودة دون إتلاف pubspec
           flutter create . --platforms=android --project-name=game_scoreboard
-          cp -f /tmp/my_code/pubspec.yaml .
-          mkdir -p lib
-          if [ -f "/tmp/my_code/lib/main.dart" ]; then
-            cp -f /tmp/my_code/lib/main.dart lib/
-          elif [ -f "/tmp/my_code/main.dart" ]; then
-            cp -f /tmp/my_code/main.dart lib/
-          fi
           flutter pub get
           flutter build apk --release --no-tree-shake-icons
 
