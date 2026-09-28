@@ -14,7 +14,8 @@ class GameRound {
 }
 
 class GameMatch {
-  final String id, t1p1, t1p2, t2p1, t2p2;
+  final String id;
+  String t1p1, t1p2, t2p1, t2p2;
   List<GameRound> rounds;
   String current1, current2, status;
   int winner;
@@ -82,6 +83,14 @@ class GroupManager {
       allGroups.add(newG);
       activeGroup = newG;
       return true;
+    }
+  }
+
+  // مسح الكروب بالكامل
+  static void deleteActiveGroup() {
+    if (activeGroup != null) {
+      allGroups.removeWhere((g) => g.code == activeGroup!.code && g.name == activeGroup!.name);
+      activeGroup = null;
     }
   }
 }
@@ -370,7 +379,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
 }
 
 // -------------------------------------------------------------
-// 3. داخل الكروب
+// 3. داخل الكروب: خيارات الكروب + زر مسح الكروب بالكامل
 // -------------------------------------------------------------
 class GroupDashboardScreen extends StatefulWidget {
   const GroupDashboardScreen({super.key});
@@ -380,6 +389,35 @@ class GroupDashboardScreen extends StatefulWidget {
 }
 
 class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
+  void _confirmDeleteGroup() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('مسح الكروب نهائياً', textAlign: TextAlign.center),
+        content: const Text(
+          'هل أنت متأكد من مسح هذا الكروب بجميع مبارياته وإحصائياته؟ لن تتمكن من استرجاع البيانات بعد الحذف.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () {
+              GroupManager.deleteActiveGroup();
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حذف الكروب بنجاح')));
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const GroupSelectScreen()),
+              );
+            },
+            child: const Text('نعم، مسح الكروب'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     var group = GroupManager.activeGroup;
@@ -393,6 +431,13 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
         centerTitle: true,
         backgroundColor: const Color(0xFF8B1E22),
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_forever, color: Colors.white),
+            tooltip: 'مسح الكروب',
+            onPressed: _confirmDeleteGroup,
+          ),
+        ],
       ),
       body: Center(
         child: Padding(
@@ -424,7 +469,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                 icon: const Icon(Icons.bar_chart, color: Color(0xFF8B1E22)),
                 label: const Text('إحصائيات (لاعب ضد لاعب)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))),
                 onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const HeadToHeadScreen()));
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const HeadToHeadScreen())).then((_) => setState(() {}));
                 },
               ),
             ],
@@ -436,7 +481,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 }
 
 // -------------------------------------------------------------
-// الشاشات التكميلية
+// شاشة كتابة أسماء اللاعبين
 // -------------------------------------------------------------
 class SetupPlayersScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -496,6 +541,9 @@ class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
   }
 }
 
+// -------------------------------------------------------------
+// شاشة تسجيل وتعديل نقاط المباراة
+// -------------------------------------------------------------
 class MatchScreen extends StatefulWidget {
   final bool isGroupGame;
   final List<String>? names;
@@ -685,19 +733,27 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 }
 
-class PastMatchesScreen extends StatelessWidget {
+// -------------------------------------------------------------
+// سجل الألعاب السابقة: إمكانية المسح والتعديل لجميع المباريات
+// -------------------------------------------------------------
+class PastMatchesScreen extends StatefulWidget {
   final bool isGroupGame;
   const PastMatchesScreen({super.key, required this.isGroupGame});
 
   @override
+  State<PastMatchesScreen> createState() => _PastMatchesScreenState();
+}
+
+class _PastMatchesScreenState extends State<PastMatchesScreen> {
+  @override
   Widget build(BuildContext context) {
-    var list = isGroupGame
+    var list = widget.isGroupGame
         ? (GroupManager.activeGroup?.matches ?? [])
         : soloMatchesList;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isGroupGame ? 'لعبات الكروب السابقة' : 'الألعاب السابقة'),
+        title: Text(widget.isGroupGame ? 'لعبات الكروب السابقة' : 'الألعاب السابقة'),
         backgroundColor: const Color(0xFF8B1E22),
         foregroundColor: Colors.white,
       ),
@@ -705,26 +761,69 @@ class PastMatchesScreen extends StatelessWidget {
           ? const Center(child: Text('لا توجد مباريات مسجلة بعد.'))
           : ListView.builder(
               itemCount: list.length,
-              itemBuilder: (_, i) => ListTile(
-                title: Text('${list[i].t1p1} & ${list[i].t1p2} ضد ${list[i].t2p1} & ${list[i].t2p2}'),
-                subtitle: Text('الحالة: ${list[i].status} | النتيجة: ${list[i].total1} - ${list[i].total2}'),
-                trailing: list[i].status == 'مؤجلة'
-                    ? IconButton(
-                        icon: const Icon(Icons.play_arrow, color: Colors.green),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => MatchScreen(isGroupGame: isGroupGame, matchToResume: list[i]),
-                          ),
+              itemBuilder: (ctx, i) {
+                final match = list[i];
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  child: ListTile(
+                    title: Text('${match.t1p1} & ${match.t1p2} ضد ${match.t2p1} & ${match.t2p2}'),
+                    subtitle: Text('الحالة: ${match.status} | النتيجة: ${match.total1} - ${match.total2}'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // تعديل نتيجة اللعبة
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.blue),
+                          tooltip: 'تعديل نتيجة اللعبة',
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => MatchScreen(isGroupGame: widget.isGroupGame, matchToResume: match),
+                              ),
+                            ).then((_) => setState(() {}));
+                          },
                         ),
-                      )
-                    : const Icon(Icons.check_circle, color: Colors.green),
-              ),
+                        // مسح اللعبة السابقة
+                        IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          tooltip: 'مسح اللعبة',
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (dCtx) => AlertDialog(
+                                title: const Text('تأكيد مسح اللعبة'),
+                                content: const Text('هل أنت متأكد من حذف هذه اللعبة من السجل؟'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('إلغاء')),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                    onPressed: () {
+                                      setState(() {
+                                        list.removeAt(i);
+                                      });
+                                      Navigator.pop(dCtx);
+                                    },
+                                    child: const Text('مسح'),
+                                  )
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
     );
   }
 }
 
+// -------------------------------------------------------------
+// شاشة إحصائيات الكروب: مع إمكانية مسح وتصفير الإحصائيات بالكامل
+// -------------------------------------------------------------
 class HeadToHeadScreen extends StatefulWidget {
   const HeadToHeadScreen({super.key});
 
@@ -768,6 +867,36 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
     return stats;
   }
 
+  // مسح الإحصائيات (عن طريق مسح نتائج المباريات المنتهية المؤثرة في الإحصائيات)
+  void _resetStats() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تصفير ومسح الإحصائيات', textAlign: TextAlign.center),
+        content: const Text(
+          'هل تريد مسح سجل نتائج المواجهات والإحصائيات السابقة؟ سيتم تصفير الفوز والخسارة لجميع اللاعبين.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () {
+              setState(() {
+                // إزالة المباريات المنتهية التي تغذي جدول الإحصائيات
+                GroupManager.activeGroup?.matches.removeWhere((m) => m.status == 'منتهية');
+                chosenPlayer = null;
+              });
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تصفير الإحصائيات بنجاح')));
+            },
+            child: const Text('نعم، مسح وتصفير'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final players = finishedPlayers;
@@ -779,12 +908,20 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
         title: const Text('إحصائيات الكروب (لاعب ضد لاعب)'),
         backgroundColor: const Color(0xFF8B1E22),
         foregroundColor: Colors.white,
+        actions: [
+          if (players.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep, color: Colors.white),
+              tooltip: 'تصفير الإحصائيات',
+              onPressed: _resetStats,
+            ),
+        ],
       ),
       body: players.isEmpty
           ? const Center(
               child: Padding(
                 padding: EdgeInsets.all(20),
-                child: Text('لا توجد مباريات منتهية داخل الكروب بعد.\nأنهِ مباراة واضغط "انتهى" لتظهر النتائج هنا.', textAlign: TextAlign.center),
+                child: Text('لا توجد إحصائيات حالياً.\nأنهِ مباراة واضغط "انتهى" لاحتساب النتائج.', textAlign: TextAlign.center),
               ),
             )
           : Padding(
