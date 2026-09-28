@@ -1,48 +1,19 @@
-name: Build Flutter APK
+name: game_scoreboard
+description: "Game Scoreboard Application"
+publish_to: "none"
+version: 1.0.0+1
 
-on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
+environment:
+  sdk: ^3.4.0
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.22.2'
-          channel: 'stable'
-
-      - name: Create Complete Android Project & Build
-        run: |
-          mkdir -p /tmp/my_code
-          cp -r . /tmp/my_code/
-          rm -rf *
-          rm -rf .git*
-          flutter create . --platforms=android --project-name=game_scoreboard
-          cp -f /tmp/my_code/pubspec.yaml .
-          mkdir -p lib
-          if [ -f "/tmp/my_code/lib/main.dart" ]; then
-            cp -f /tmp/my_code/lib/main.dart lib/
-          elif [ -f "/tmp/my_code/main.dart" ]; then
-            cp -f /tmp/my_code/main.dart lib/
-          fi
-          flutter pub get
-          flutter build apk --release --no-tree-shake-icons
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: game-app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+flutter:
+  uses-material-design: true
