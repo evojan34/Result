@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -6,11 +8,15 @@ void main() {
 }
 
 // -------------------------------------------------------------
-// نماذج البيانات
+// نماذج البيانات وتجهيزها للرفع السحابي (JSON)
 // -------------------------------------------------------------
 class GameRound {
   int s1, s2;
   GameRound(this.s1, this.s2);
+
+  Map<String, dynamic> toJson() => {'s1': s1, 's2': s2};
+  factory GameRound.fromJson(Map<String, dynamic> j) =>
+      GameRound(j['s1'] ?? 0, j['s2'] ?? 0);
 }
 
 class GameMatch {
@@ -35,6 +41,34 @@ class GameMatch {
 
   int get total1 => rounds.fold(0, (a, b) => a + b.s1) + (int.tryParse(current1) ?? 0);
   int get total2 => rounds.fold(0, (a, b) => a + b.s2) + (int.tryParse(current2) ?? 0);
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        't1p1': t1p1,
+        't1p2': t1p2,
+        't2p1': t2p1,
+        't2p2': t2p2,
+        'rounds': rounds.map((r) => r.toJson()).toList(),
+        'current1': current1,
+        'current2': current2,
+        'status': status,
+        'winner': winner,
+      };
+
+  factory GameMatch.fromJson(Map<String, dynamic> j) => GameMatch(
+        id: j['id'] ?? '',
+        t1p1: j['t1p1'] ?? '',
+        t1p2: j['t1p2'] ?? '',
+        t2p1: j['t2p1'] ?? '',
+        t2p2: j['t2p2'] ?? '',
+        rounds: (j['rounds'] as List? ?? [])
+            .map((r) => GameRound.fromJson(Map<String, dynamic>.from(r)))
+            .toList(),
+        current1: j['current1'] ?? '',
+        current2: j['current2'] ?? '',
+        status: j['status'] ?? 'مؤجلة',
+        winner: j['winner'] ?? 0,
+      );
 }
 
 List<GameMatch> soloMatchesList = [];
@@ -46,50 +80,122 @@ class GroupData {
   GroupData({required this.code, required this.name});
 }
 
+// -------------------------------------------------------------
+// محرك المزامنة السحابية الحقيقية (Cloud Sync Engine)
+// -------------------------------------------------------------
+class CloudService {
+  // قاعدة بيانات سحابية حية للمزامنة بين الهواتف
+  static const String serverUrl = 'https://games-scoreboard-default-rtdb.firebaseio.com';
+
+  static String _cleanKey(String key) {
+    return base64Url.encode(utf8.encode(key.trim()));
+  }
+
+  // رفع وحفظ بيانات الكروب إلى السيرفر
+  static Future<void> syncGroupToCloud(GroupData group) async {
+    try {
+      final key = _cleanKey(group.code);
+      final url = Uri.parse('$serverUrl/groups/$key.json');
+      final payload = jsonEncode({
+        'code': group.code,
+        'name': group.name,
+        'matches': group.matches.map((m) => m.toJson()).toList(),
+      });
+
+      final client = HttpClient();
+      final req = await client.putUrl(url);
+      req.headers.contentType = ContentType.json;
+      req.write(payload);
+      final res = await req.close();
+      await res.drain();
+      client.close();
+    } catch (_) {}
+  }
+
+  // جلب بيانات الكروب من السيرفر لأي هاتف
+  static Future<GroupData?> fetchGroupFromCloud(String code) async {
+    try {
+      final key = _cleanKey(code);
+      final url = Uri.parse('$serverUrl/groups/$key.json');
+      final client = HttpClient();
+      final req = await client.getUrl(url);
+      final res = await req.close();
+
+      if (res.statusCode == 200) {
+        final body = await res.transform(utf8.decoder).join();
+        if (body != 'null' && body.isNotEmpty) {
+          final data = jsonDecode(body) as Map<String, dynamic>;
+          var group = GroupData(code: data['code'] ?? code, name: data['name'] ?? 'كروب');
+          if (data['matches'] != null) {
+            group.matches = (data['matches'] as List)
+                .map((m) => GameMatch.fromJson(Map<String, dynamic>.from(m)))
+                .toList();
+          }
+          client.close();
+          return group;
+        }
+      }
+      client.close();
+    } catch (_) {}
+    return null;
+  }
+
+  // مسح الكروب من السيرفر
+  static Future<void> deleteGroupFromCloud(String code) async {
+    try {
+      final key = _cleanKey(code);
+      final url = Uri.parse('$serverUrl/groups/$key.json');
+      final client = HttpClient();
+      final req = await client.deleteUrl(url);
+      final res = await req.close();
+      await res.drain();
+      client.close();
+    } catch (_) {}
+  }
+}
+
 class GroupManager {
-  static final List<GroupData> allGroups = [];
   static GroupData? activeGroup;
 
-  static bool createGroupCustom(String name, String customCode) {
+  static Future<bool> createGroupCustom(String name, String customCode) async {
     String cleanName = name.trim();
     String cleanCode = customCode.trim();
     if (cleanName.isEmpty || cleanCode.isEmpty) return false;
 
-    int idx = allGroups.indexWhere((g) => g.code == cleanCode && g.name == cleanName);
-    if (idx != -1) {
-      activeGroup = allGroups[idx];
-    } else {
-      var newG = GroupData(code: cleanCode, name: cleanName);
-      allGroups.add(newG);
-      activeGroup = newG;
-    }
+    var newG = GroupData(code: cleanCode, name: cleanName);
+    activeGroup = newG;
+    await CloudService.syncGroupToCloud(newG);
     return true;
   }
 
-  static List<GroupData> findGroupsByCode(String code) {
+  static Future<bool> joinGroup(String code, {String? optionalName}) async {
     String cleanCode = code.trim();
-    return allGroups.where((g) => g.code == cleanCode).toList();
-  }
+    if (cleanCode.isEmpty) return false;
 
-  static bool joinGroupByNameAndCode(String code, String name) {
-    String cleanCode = code.trim();
-    String cleanName = name.trim();
-    int idx = allGroups.indexWhere((g) => g.code == cleanCode && g.name.toLowerCase() == cleanName.toLowerCase());
-    if (idx != -1) {
-      activeGroup = allGroups[idx];
+    // جلب من السيرفر أولاً
+    GroupData? remoteGroup = await CloudService.fetchGroupFromCloud(cleanCode);
+
+    if (remoteGroup != null) {
+      activeGroup = remoteGroup;
       return true;
     } else {
-      var newG = GroupData(code: cleanCode, name: cleanName);
-      allGroups.add(newG);
+      // إذا لم يكن موجوداً بالسيرفر ننشئه
+      var newG = GroupData(code: cleanCode, name: optionalName ?? 'كروب $cleanCode');
       activeGroup = newG;
+      await CloudService.syncGroupToCloud(newG);
       return true;
     }
   }
 
-  // مسح الكروب بالكامل
-  static void deleteActiveGroup() {
+  static Future<void> saveCurrentGroup() async {
     if (activeGroup != null) {
-      allGroups.removeWhere((g) => g.code == activeGroup!.code && g.name == activeGroup!.name);
+      await CloudService.syncGroupToCloud(activeGroup!);
+    }
+  }
+
+  static Future<void> deleteActiveGroup() async {
+    if (activeGroup != null) {
+      await CloudService.deleteGroupFromCloud(activeGroup!.code);
       activeGroup = null;
     }
   }
@@ -196,8 +302,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       elevation: 8,
                     ),
-                    icon: const Icon(Icons.groups, size: 28, color: Colors.black87),
-                    label: const Text('لعبة الكروب', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.cloud_sync, size: 28, color: Colors.black87),
+                    label: const Text('لعبة الكروب (سحابي)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -216,7 +322,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 }
 
 // -------------------------------------------------------------
-// 2. بوابة الكروبات
+// 2. بوابة الكروبات (تحميل البيانات عبر السيرفر)
 // -------------------------------------------------------------
 class GroupSelectScreen extends StatefulWidget {
   const GroupSelectScreen({super.key});
@@ -229,6 +335,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
   final TextEditingController createNameCtrl = TextEditingController();
   final TextEditingController customCodeCtrl = TextEditingController();
   final TextEditingController enterCodeCtrl = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -238,148 +345,116 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
     super.dispose();
   }
 
-  void _handleCreate() {
+  void _handleCreate() async {
     String name = createNameCtrl.text.trim();
     String code = customCodeCtrl.text.trim();
 
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى كتابة اسم الكروب أولاً')));
-      return;
-    }
-    if (code.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى كتابة الرمز السري للكروب')));
+    if (name.isEmpty || code.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى ملء اسم الكروب والرمز')));
       return;
     }
 
-    GroupManager.createGroupCustom(name, code);
+    setState(() => _isLoading = true);
+    await GroupManager.createGroupCustom(name, code);
+    setState(() => _isLoading = false);
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const GroupDashboardScreen()),
     );
   }
 
-  void _handleJoin() {
+  void _handleJoin() async {
     String code = enterCodeCtrl.text.trim();
     if (code.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى إدخال الرمز السري للكروب')));
       return;
     }
 
-    List<GroupData> matchingGroups = GroupManager.findGroupsByCode(code);
+    setState(() => _isLoading = true);
+    await GroupManager.joinGroup(code);
+    setState(() => _isLoading = false);
 
-    if (matchingGroups.isEmpty) {
-      _askForGroupNameDialog(code, 'لم يتم العثور على كروب بهذا الرمز. اكتب اسم الكروب للدخول:');
-    } else if (matchingGroups.length == 1) {
-      GroupManager.activeGroup = matchingGroups.first;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const GroupDashboardScreen()),
-      );
-    } else {
-      _askForGroupNameDialog(code, 'يوجد أكثر من كروب بهذا الرمز. يرجى كتابة اسم الكروب:');
-    }
-  }
-
-  void _askForGroupNameDialog(String code, String message) {
-    final TextEditingController nameConfirmCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('تأكيد اسم الكروب', textAlign: TextAlign.center),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 14, color: Colors.grey)),
-            const SizedBox(height: 14),
-            TextField(
-              controller: nameConfirmCtrl,
-              decoration: const InputDecoration(labelText: 'اسم الكروب', border: OutlineInputBorder()),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
-            onPressed: () {
-              String name = nameConfirmCtrl.text.trim();
-              if (name.isEmpty) return;
-              Navigator.pop(ctx);
-              GroupManager.joinGroupByNameAndCode(code, name);
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const GroupDashboardScreen()),
-              );
-            },
-            child: const Text('تأكيد ودخول'),
-          )
-        ],
-      ),
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const GroupDashboardScreen()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('بوابة الكروبات'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            const Icon(Icons.shield_outlined, size: 64, color: Color(0xFF8B1E22)),
-            const SizedBox(height: 16),
-            Card(
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text('دخول كروب جديد', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))),
-                    const Divider(height: 18),
-                    TextField(controller: createNameCtrl, decoration: const InputDecoration(hintText: 'اسم الكروب', border: OutlineInputBorder())),
-                    const SizedBox(height: 12),
-                    TextField(controller: customCodeCtrl, decoration: const InputDecoration(hintText: 'الرمز السري المخصص', border: OutlineInputBorder())),
-                    const SizedBox(height: 14),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
-                      onPressed: _handleCreate,
-                      child: const Text('حفظ الكروب ودخول'),
+      appBar: AppBar(title: const Text('بوابة الكروبات المشتركة'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF8B1E22)))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  const Icon(Icons.cloud_done, size: 64, color: Color(0xFF8B1E22)),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'الكروبات متصلة سحابياً: أي لعبة يتم تسجيلها ستصل لجميع أصحابك على هواتفهم فوراً عبر الرمز السري',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // إنشاء كروب جديد
+                  Card(
+                    elevation: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text('دخول كروب جديد', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))),
+                          const Divider(height: 18),
+                          TextField(controller: createNameCtrl, decoration: const InputDecoration(hintText: 'اسم الكروب', border: OutlineInputBorder())),
+                          const SizedBox(height: 12),
+                          TextField(controller: customCodeCtrl, decoration: const InputDecoration(hintText: 'الرمز السري المخصص', border: OutlineInputBorder())),
+                          const SizedBox(height: 14),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
+                            onPressed: _handleCreate,
+                            child: const Text('حفظ ورفع الكروب سحابياً'),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // لديك كروب
+                  Card(
+                    elevation: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text('لديك كروب؟ ضع الرمز السري', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                          const Divider(height: 18),
+                          TextField(controller: enterCodeCtrl, decoration: const InputDecoration(hintText: 'اكتب الرمز السري للكروب', border: OutlineInputBorder())),
+                          const SizedBox(height: 14),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, foregroundColor: Colors.white),
+                            onPressed: _handleJoin,
+                            child: const Text('دخول وجلب نتائج الكروب المشترك'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 20),
-            Card(
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text('لديك كروب؟ ضع الرمز السري', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-                    const Divider(height: 18),
-                    TextField(controller: enterCodeCtrl, decoration: const InputDecoration(hintText: 'اكتب الرمز السري للكروب', border: OutlineInputBorder())),
-                    const SizedBox(height: 14),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, foregroundColor: Colors.white),
-                      onPressed: _handleJoin,
-                      child: const Text('دخول للكروب بالرمز السري'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
 
 // -------------------------------------------------------------
-// 3. داخل الكروب: خيارات الكروب + زر مسح الكروب بالكامل
+// 3. داخل الكروب المشترك (مع زر تحديث يدوي للمزامنة)
 // -------------------------------------------------------------
 class GroupDashboardScreen extends StatefulWidget {
   const GroupDashboardScreen({super.key});
@@ -389,23 +464,32 @@ class GroupDashboardScreen extends StatefulWidget {
 }
 
 class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
+  bool _isRefreshing = false;
+
+  Future<void> _refresh() async {
+    if (GroupManager.activeGroup != null) {
+      setState(() => _isRefreshing = true);
+      await GroupManager.joinGroup(GroupManager.activeGroup!.code);
+      setState(() => _isRefreshing = false);
+    }
+  }
+
   void _confirmDeleteGroup() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('مسح الكروب نهائياً', textAlign: TextAlign.center),
+        title: const Text('مسح الكروب من السيرفر نهائياً', textAlign: TextAlign.center),
         content: const Text(
-          'هل أنت متأكد من مسح هذا الكروب بجميع مبارياته وإحصائياته؟ لن تتمكن من استرجاع البيانات بعد الحذف.',
+          'سيتم مسح هذا الكروب ومبارياته من جميع الهواتف نهائياً.',
           textAlign: TextAlign.center,
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () {
-              GroupManager.deleteActiveGroup();
+            onPressed: () async {
+              await GroupManager.deleteActiveGroup();
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حذف الكروب بنجاح')));
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (_) => const GroupSelectScreen()),
@@ -432,6 +516,13 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
         backgroundColor: const Color(0xFF8B1E22),
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: _isRefreshing
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.refresh),
+            tooltip: 'تحديث النتائج من السيرفر',
+            onPressed: _refresh,
+          ),
           IconButton(
             icon: const Icon(Icons.delete_forever, color: Colors.white),
             tooltip: 'مسح الكروب',
@@ -481,7 +572,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 }
 
 // -------------------------------------------------------------
-// شاشة كتابة أسماء اللاعبين
+// الشاشات التكميلية (تحديد اللاعبين، تسجيل النتائج، السجل، والإحصائيات)
 // -------------------------------------------------------------
 class SetupPlayersScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -541,9 +632,6 @@ class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
   }
 }
 
-// -------------------------------------------------------------
-// شاشة تسجيل وتعديل نقاط المباراة
-// -------------------------------------------------------------
 class MatchScreen extends StatefulWidget {
   final bool isGroupGame;
   final List<String>? names;
@@ -616,19 +704,23 @@ class _MatchScreenState extends State<MatchScreen> {
     );
   }
 
-  void save(String status, int win) {
+  void save(String status, int win) async {
     var m = GameMatch(
       id: id, t1p1: t1p1, t1p2: t1p2, t2p1: t2p1, t2p2: t2p2,
       rounds: List.from(rounds), current1: c1.text, current2: c2.text,
       status: status, winner: win,
     );
 
-    List<GameMatch> targetList = widget.isGroupGame
-        ? (GroupManager.activeGroup?.matches ?? [])
-        : soloMatchesList;
+    if (widget.isGroupGame) {
+      var list = GroupManager.activeGroup?.matches ?? [];
+      int idx = list.indexWhere((x) => x.id == id);
+      if (idx != -1) list[idx] = m; else list.insert(0, m);
+      await GroupManager.saveCurrentGroup(); // حفظ ورفع للسيرفر فوراً
+    } else {
+      int idx = soloMatchesList.indexWhere((x) => x.id == id);
+      if (idx != -1) soloMatchesList[idx] = m; else soloMatchesList.insert(0, m);
+    }
 
-    int idx = targetList.indexWhere((x) => x.id == id);
-    if (idx != -1) targetList[idx] = m; else targetList.insert(0, m);
     Navigator.pop(context);
   }
 
@@ -733,9 +825,6 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 }
 
-// -------------------------------------------------------------
-// سجل الألعاب السابقة: إمكانية المسح والتعديل لجميع المباريات
-// -------------------------------------------------------------
 class PastMatchesScreen extends StatefulWidget {
   final bool isGroupGame;
   const PastMatchesScreen({super.key, required this.isGroupGame});
@@ -771,7 +860,6 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // تعديل نتيجة اللعبة
                         IconButton(
                           icon: const Icon(Icons.edit, color: Colors.blue),
                           tooltip: 'تعديل نتيجة اللعبة',
@@ -784,7 +872,6 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
                             ).then((_) => setState(() {}));
                           },
                         ),
-                        // مسح اللعبة السابقة
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           tooltip: 'مسح اللعبة',
@@ -793,15 +880,18 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
                               context: context,
                               builder: (dCtx) => AlertDialog(
                                 title: const Text('تأكيد مسح اللعبة'),
-                                content: const Text('هل أنت متأكد من حذف هذه اللعبة من السجل؟'),
+                                content: const Text('هل أنت متأكد من حذف هذه اللعبة؟'),
                                 actions: [
                                   TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('إلغاء')),
                                   ElevatedButton(
                                     style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                                    onPressed: () {
+                                    onPressed: () async {
                                       setState(() {
                                         list.removeAt(i);
                                       });
+                                      if (widget.isGroupGame) {
+                                        await GroupManager.saveCurrentGroup();
+                                      }
                                       Navigator.pop(dCtx);
                                     },
                                     child: const Text('مسح'),
@@ -821,9 +911,6 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
   }
 }
 
-// -------------------------------------------------------------
-// شاشة إحصائيات الكروب: مع إمكانية مسح وتصفير الإحصائيات بالكامل
-// -------------------------------------------------------------
 class HeadToHeadScreen extends StatefulWidget {
   const HeadToHeadScreen({super.key});
 
@@ -867,26 +954,25 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
     return stats;
   }
 
-  // مسح الإحصائيات (عن طريق مسح نتائج المباريات المنتهية المؤثرة في الإحصائيات)
   void _resetStats() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('تصفير ومسح الإحصائيات', textAlign: TextAlign.center),
         content: const Text(
-          'هل تريد مسح سجل نتائج المواجهات والإحصائيات السابقة؟ سيتم تصفير الفوز والخسارة لجميع اللاعبين.',
+          'هل تريد مسح سجل نتائج المواجهات؟ سيتم تصفير النتائج عند جميع الهواتف المشتركة.',
           textAlign: TextAlign.center,
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () {
+            onPressed: () async {
               setState(() {
-                // إزالة المباريات المنتهية التي تغذي جدول الإحصائيات
                 GroupManager.activeGroup?.matches.removeWhere((m) => m.status == 'منتهية');
                 chosenPlayer = null;
               });
+              await GroupManager.saveCurrentGroup();
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تصفير الإحصائيات بنجاح')));
             },
