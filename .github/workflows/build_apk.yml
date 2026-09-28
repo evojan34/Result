@@ -23,15 +23,22 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Build APK Directly
+      - name: Create Structure and Build APK
         run: |
-          # إنشاء مجلدات أندرويد فقط إذا كانت غير موجودة دون إتلاف pubspec
+          # التأكد من وجود مجلد lib والملف بداخله
+          mkdir -p lib
+          if [ -f "main.dart" ]; then mv main.dart lib/; fi
+          
+          # إنشاء مشروع أندرويد متكامل
           flutter create . --platforms=android --project-name=game_scoreboard
+          
           flutter pub get
-          flutter build apk --release --no-tree-shake-icons
+          
+          # بناء APK جاهز للتثبيت بدون تعقيدات التوقيع
+          flutter build apk --debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: game-app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: game-app-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
