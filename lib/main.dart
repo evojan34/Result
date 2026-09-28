@@ -97,17 +97,39 @@ class GroupData {
 }
 
 // -------------------------------------------------------------
-// محرك السحابة الخاص بمشروعك على Firebase
+// محرك السحابة والتحديثات المستقبلية
 // -------------------------------------------------------------
 class CloudStorage {
-  // تم ربط السيرفر برابطك الخاص
   static const String host = 'https://games-242da-default-rtdb.firebaseio.com';
+  static const String currentVersion = '1.0.0';
 
   static String _formatKey(String code) {
     return base64Url.encode(utf8.encode(code.trim().toLowerCase())).replaceAll('=', '');
   }
 
-  // حفظ الكروب في قاعدة بياناتك الخاصة
+  // فحص التحديثات الجديدة عبر السحابة
+  static Future<Map<String, dynamic>?> checkForUpdates() async {
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 4);
+      final req = await client.getUrl(Uri.parse('$host/app_update.json'));
+      final res = await req.close();
+      if (res.statusCode == 200) {
+        final body = await res.transform(utf8.decoder).join();
+        if (body != 'null' && body.trim().isNotEmpty) {
+          final data = jsonDecode(body);
+          if (data is Map<String, dynamic>) {
+            client.close();
+            return data;
+          }
+        }
+      }
+      client.close();
+    } catch (_) {}
+    return null;
+  }
+
+  // حفظ الكروب في قاعدة بياناتك
   static Future<bool> saveGroup(GroupData group) async {
     try {
       final key = _formatKey(group.code);
@@ -125,7 +147,7 @@ class CloudStorage {
     }
   }
 
-  // استرجاع الكروب للتأكد من وجوده
+  // استرجاع الكروب
   static Future<GroupData?> fetchGroup(String code) async {
     try {
       final key = _formatKey(code);
@@ -200,7 +222,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'لوحة الألعاب',
+      title: 'Natija',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF8B1E22)),
         useMaterial3: true,
@@ -211,7 +233,7 @@ class MyApp extends StatelessWidget {
 }
 
 // -------------------------------------------------------------
-// 1. الشاشة الرئيسية
+// 1. الشاشة الرئيسية مع نظام فحص التحديثات
 // -------------------------------------------------------------
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({super.key});
@@ -222,14 +244,63 @@ class MainHomeScreen extends StatefulWidget {
 
 class _MainHomeScreenState extends State<MainHomeScreen> {
   final String bgImageUrl =
-      'https://images.unsplash.com/photo-1541278107931-e006523892df?q=80&w=1000&auto=format&fit=crop';
+      'https://images.pexels.com/photos/262333/pexels-photo-262333.jpeg';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkUpdateAlert();
+    });
+  }
+
+  // فحص إصدار التطبيق وعرض نافذة التحديث
+  void _checkUpdateAlert() async {
+    final updateInfo = await CloudStorage.checkForUpdates();
+    if (updateInfo != null && mounted) {
+      String latest = updateInfo['version'] ?? '1.0.0';
+      String note = updateInfo['notes'] ?? 'يوجد إصدار جديد من تطبيق Natija بميزات إضافية!';
+      String url = updateInfo['url'] ?? '';
+
+      if (latest != CloudStorage.currentVersion) {
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (ctx) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.system_update, color: Color(0xFF8B1E22)),
+                SizedBox(width: 8),
+                Text('تحديث جديد متاح'),
+              ],
+            ),
+            content: Text('الإصدار الحالي: ${CloudStorage.currentVersion}\nالإصدار الجديد: $latest\n\n$note'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('لاحقاً')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: url));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('تم نسخ رابط التحديث، الصقه في المتصفح للتحميل.')),
+                  );
+                  Navigator.pop(ctx);
+                },
+                child: const Text('نسخ رابط التحديث'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('لوحة تحكم الألعاب', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: const Text('Natija', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.white, letterSpacing: 1.2)),
         centerTitle: true,
         backgroundColor: Colors.black.withOpacity(0.4),
         elevation: 0,
@@ -241,7 +312,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           image: DecorationImage(image: NetworkImage(bgImageUrl), fit: BoxFit.cover),
         ),
         child: Container(
-          color: Colors.black.withOpacity(0.6),
+          color: Colors.black.withOpacity(0.65),
           child: SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -311,7 +382,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 }
 
 // -------------------------------------------------------------
-// 2. بوابة الكروبات (التحقق وتأكيد اسم الكروب)
+// 2. بوابة الكروبات
 // -------------------------------------------------------------
 class GroupSelectScreen extends StatefulWidget {
   const GroupSelectScreen({super.key});
@@ -364,7 +435,6 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
     GroupData? remote = await CloudStorage.fetchGroup(code);
     setState(() => _isLoading = false);
 
-    // الحالة 1: لا يوجد كروب بهذا الرمز
     if (remote == null) {
       showDialog(
         context: context,
@@ -389,7 +459,6 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
       return;
     }
 
-    // الحالة 2: وُجد الكروب -> نافذة تطلب اسم الكروب لمطابقته
     _showConfirmNameModal(remote);
   }
 
@@ -634,7 +703,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 }
 
 // -------------------------------------------------------------
-// باقي الشاشات (تحديد اللاعبين، تسجيل النتيجة، السجل، والإحصائيات)
+// الشاشات المتبقية (تحديد اللاعبين، شاشة المباراة، السجل، والإحصائيات)
 // -------------------------------------------------------------
 class SetupPlayersScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -778,7 +847,7 @@ class _MatchScreenState extends State<MatchScreen> {
       var list = GroupManager.activeGroup?.matches ?? [];
       int idx = list.indexWhere((x) => x.id == id);
       if (idx != -1) list[idx] = m; else list.insert(0, m);
-      await GroupManager.updateActiveGroup(); // حفظ ورفع للفايربيس فوراً
+      await GroupManager.updateActiveGroup();
     } else {
       int idx = soloMatchesList.indexWhere((x) => x.id == id);
       if (idx != -1) soloMatchesList[idx] = m; else soloMatchesList.insert(0, m);
