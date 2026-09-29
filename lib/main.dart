@@ -749,7 +749,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 }
 
 // -------------------------------------------------------------
-// 4. تحديد اللاعبين (بسيطة ومباشرة)
+// 4. تحديد اللاعبين
 // -------------------------------------------------------------
 class SetupPlayersScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -810,7 +810,7 @@ class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
 }
 
 // -------------------------------------------------------------
-// 5. شاشة المباراة (المؤقت الزمني والفارق والقصاصات)
+// 5. شاشة المباراة (بتصميم عصري جديد وتم حل مشكلة التعليق)
 // -------------------------------------------------------------
 class MatchScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -873,7 +873,30 @@ class _MatchScreenState extends State<MatchScreen> {
   int get tot1 => rounds.fold(0, (a, b) => a + b.s1) + (int.tryParse(c1.text) ?? 0);
   int get tot2 => rounds.fold(0, (a, b) => a + b.s2) + (int.tryParse(c2.text) ?? 0);
 
-  void _shareCardDialog(String winnerText, String loserText, int wScore, int lScore) {
+  // دالة الحفظ وإغلاق الشاشة
+  Future<void> saveAndClose(String status, int win) async {
+    _timer?.cancel(); 
+    var m = GameMatch(
+      id: id, t1p1: t1p1, t1p2: t1p2, t2p1: t2p1, t2p2: t2p2,
+      rounds: List.from(rounds), current1: c1.text, current2: c2.text,
+      status: status, winner: win, durationSeconds: _seconds,
+    );
+
+    if (widget.isGroupGame) {
+      var list = GroupManager.activeGroup?.matches ?? [];
+      int idx = list.indexWhere((x) => x.id == id);
+      if (idx != -1) list[idx] = m; else list.insert(0, m);
+      await GroupManager.updateActiveGroup();
+    } else {
+      int idx = soloMatchesList.indexWhere((x) => x.id == id);
+      if (idx != -1) soloMatchesList[idx] = m; else soloMatchesList.insert(0, m);
+    }
+    
+    if (mounted) Navigator.pop(context); // الخروج يتم مرة واحدة هنا
+  }
+
+  // تم تعديل النافذة لتقوم باستدعاء saveAndClose عند الإغلاق
+  void _shareCardDialog(String winnerText, String loserText, int wScore, int lScore, int winId) {
     String cardText = '''
 🏆 **بطاقة نتيجة Natija** 🏆
 ━━━━━━━━━━━━━━━
@@ -886,7 +909,7 @@ class _MatchScreenState extends State<MatchScreen> {
 
     showDialog(
       context: context,
-      barrierDismissible: true,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Text('بطاقة ملخص المباراة', textAlign: TextAlign.center),
         content: Container(
@@ -906,14 +929,19 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx); // يغلق النافذة
+              saveAndClose('منتهية', winId); // ثم يحفظ ويغلق الشاشة
+            }, 
+            child: const Text('إغلاق وإنهاء')
+          ),
           ElevatedButton.icon(
             icon: const Icon(Icons.copy),
             label: const Text('نسخ للمشاركة'),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: cardText));
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ بطاقة النتيجة بنجاح!')));
-              Navigator.pop(ctx);
             },
           )
         ],
@@ -954,43 +982,12 @@ class _MatchScreenState extends State<MatchScreen> {
     );
   }
 
-  void save(String status, int win) async {
-    _timer?.cancel(); 
-    var m = GameMatch(
-      id: id, t1p1: t1p1, t1p2: t1p2, t2p1: t2p1, t2p2: t2p2,
-      rounds: List.from(rounds), current1: c1.text, current2: c2.text,
-      status: status, winner: win, durationSeconds: _seconds,
-    );
-
-    if (widget.isGroupGame) {
-      var list = GroupManager.activeGroup?.matches ?? [];
-      int idx = list.indexWhere((x) => x.id == id);
-      if (idx != -1) list[idx] = m; else list.insert(0, m);
-      await GroupManager.updateActiveGroup();
-    } else {
-      int idx = soloMatchesList.indexWhere((x) => x.id == id);
-      if (idx != -1) soloMatchesList[idx] = m; else soloMatchesList.insert(0, m);
-    }
-
-    if (mounted) Navigator.pop(context);
-  }
-
   @override
   Widget build(BuildContext context) {
-    // حساب الفارق بين النقاط ومن المتصدر
     int diff = (tot1 - tot2).abs();
-    String leadText = "النتيجة تعادل";
-    Color leadColor = Colors.grey.shade800;
-
-    if (tot1 > tot2) {
-      leadText = 'الصدارة لـ ($t1p1 & $t1p2) بفارق $diff نقطة';
-      leadColor = Colors.green.shade700;
-    } else if (tot2 > tot1) {
-      leadText = 'الصدارة لـ ($t2p1 & $t2p2) بفارق $diff نقطة';
-      leadColor = Colors.green.shade700;
-    }
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF9F9F9), // لون خلفية عصري فاتح
       appBar: AppBar(
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1009,106 +1006,164 @@ class _MatchScreenState extends State<MatchScreen> {
         children: [
           Column(
             children: [
-              Container(
-                padding: const EdgeInsets.only(top: 16, bottom: 8, left: 16, right: 16),
-                color: Colors.red.shade50,
+              // --- الواجهة العصرية الجديدة (الكاردات) ---
+              Padding(
+                padding: const EdgeInsets.all(12),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    Column(children: [Text('$t1p1 & $t1p2', style: const TextStyle(fontWeight: FontWeight.bold)), Text('$tot1', style: const TextStyle(fontSize: 26, color: Color(0xFF8B1E22), fontWeight: FontWeight.bold))]),
-                    const Text('المجموع', style: TextStyle(fontWeight: FontWeight.bold)),
-                    Column(children: [Text('$t2p1 & $t2p2', style: const TextStyle(fontWeight: FontWeight.bold)), Text('$tot2', style: const TextStyle(fontSize: 26, color: Color(0xFF8B1E22), fontWeight: FontWeight.bold))]),
-                  ],
-                ),
-              ),
-              // شريط فارق النقاط
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                decoration: BoxDecoration(
-                  color: tot1 == tot2 ? Colors.grey.shade300 : Colors.amber.shade100,
-                  border: Border(bottom: BorderSide(color: Colors.grey.shade400, width: 1)),
-                ),
-                child: Text(
-                  leadText,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontWeight: FontWeight.bold, color: leadColor, fontSize: 15),
-                ),
-              ),
-              Expanded(
-                child: ListView(
-                  children: [
-                    for (int i = 0; i < rounds.length; i++)
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    // كارد الفريق الأول
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                        decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(16)),
+                        child: Column(
                           children: [
-                            Text('${rounds[i].s1}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text('لعبة ${i + 1} ', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                IconButton(icon: const Icon(Icons.edit, size: 18, color: Colors.blue), onPressed: () => _editRound(i)),
-                                IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () => setState(() => rounds.removeAt(i))),
-                              ],
-                            ),
-                            Text('${rounds[i].s2}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            Text('$t1p1\n& $t1p2', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+                            const SizedBox(height: 8),
+                            Text('$tot1', style: const TextStyle(fontSize: 32, color: Color(0xFF8B1E22), fontWeight: FontWeight.bold)),
+                            const Text('المجموع', style: TextStyle(fontSize: 12, color: Colors.black54)),
                           ],
                         ),
                       ),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
+                    ),
+                    const SizedBox(width: 8),
+                    // كارد الفريق الثاني
+                    Expanded(
+                      flex: 3,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                        decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(16)),
+                        child: Column(
+                          children: [
+                            Text('$t2p1\n& $t2p2', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+                            const SizedBox(height: 8),
+                            Text('$tot2', style: const TextStyle(fontSize: 32, color: Colors.green, fontWeight: FontWeight.bold)),
+                            const Text('المجموع', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // كارد الفارق فقط
+                    Expanded(
+                      flex: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
+                        decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(16)),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('الفارق', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.blue)),
+                            const SizedBox(height: 8),
+                            Text('$diff', style: const TextStyle(fontSize: 32, color: Colors.blue, fontWeight: FontWeight.bold)),
+                            const Text('نقاط', style: TextStyle(fontSize: 12, color: Colors.blue)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // ------------------------------------------
+
+              // قائمة الجولات
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  children: [
+                    for (int i = 0; i < rounds.length; i++)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))]),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(width: 60, height: 40, alignment: Alignment.center, decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)), child: Text('${rounds[i].s1}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22)))),
+                            Row(
+                              children: [
+                                Text('لعبة ${i + 1} ', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
+                                IconButton(icon: const Icon(Icons.edit, size: 20, color: Colors.blue), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => _editRound(i)),
+                                const SizedBox(width: 12),
+                                IconButton(icon: const Icon(Icons.delete, size: 20, color: Colors.red), padding: EdgeInsets.zero, constraints: const BoxConstraints(), onPressed: () => setState(() => rounds.removeAt(i))),
+                              ],
+                            ),
+                            Container(width: 60, height: 40, alignment: Alignment.center, decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)), child: Text('${rounds[i].s2}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green))),
+                          ],
+                        ),
+                      ),
+                    
+                    // مربعات إدخال النتيجة الجديدة
+                    Container(
+                      margin: const EdgeInsets.only(top: 8, bottom: 16),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade300)),
                       child: Row(
                         children: [
-                          Expanded(child: TextField(controller: c1, keyboardType: TextInputType.number, textAlign: TextAlign.center, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: '0'), onChanged: (_) => setState(() {}))),
-                          Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text('لعبة ${rounds.length + 1}')),
-                          Expanded(child: TextField(controller: c2, keyboardType: TextInputType.number, textAlign: TextAlign.center, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: '0'), onChanged: (_) => setState(() {}))),
+                          Expanded(child: TextField(controller: c1, keyboardType: TextInputType.number, textAlign: TextAlign.center, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), hintText: '0', contentPadding: const EdgeInsets.symmetric(vertical: 12)), onChanged: (_) => setState(() {}))),
+                          Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text('لعبة ${rounds.length + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54))),
+                          Expanded(child: TextField(controller: c2, keyboardType: TextInputType.number, textAlign: TextAlign.center, decoration: InputDecoration(border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)), hintText: '0', contentPadding: const EdgeInsets.symmetric(vertical: 12)), onChanged: (_) => setState(() {}))),
                         ],
                       ),
                     ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
-                        onPressed: () {
-                          HapticFeedback.lightImpact();
-                          setState(() {
-                            rounds.add(GameRound(int.tryParse(c1.text) ?? 0, int.tryParse(c2.text) ?? 0));
-                            c1.clear(); c2.clear();
-                          });
-                        },
-                        child: Text('تأكيد لعبة ${rounds.length + 1} وفتح التالية'),
+
+                    // زر تأكيد اللعبة
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24))),
+                      onPressed: () {
+                        HapticFeedback.lightImpact();
+                        setState(() {
+                          rounds.add(GameRound(int.tryParse(c1.text) ?? 0, int.tryParse(c2.text) ?? 0));
+                          c1.clear(); c2.clear();
+                        });
+                      },
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.play_arrow, color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text('تأكيد لعبة ${rounds.length + 1} وفتح التالية', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        ],
                       ),
                     )
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(12),
+              
+              // الأزرار السفلية (تأجيل / انتهى)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -4))]),
                 child: Row(
                   children: [
-                    Expanded(child: OutlinedButton(onPressed: () => save('مؤجلة', 0), child: const Text('تأجيل'))),
-                    const SizedBox(width: 8),
                     Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), side: const BorderSide(color: Color(0xFF8B1E22))),
+                        icon: const Icon(Icons.refresh, color: Color(0xFF8B1E22)),
+                        label: const Text('تأجيل', style: TextStyle(color: Color(0xFF8B1E22), fontWeight: FontWeight.bold, fontSize: 16)),
+                        onPressed: () => saveAndClose('مؤجلة', 0),
+                      )
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24))),
+                        icon: const Icon(Icons.check, color: Colors.white),
+                        label: const Text('انتهى', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                         onPressed: () {
                           HapticFeedback.heavyImpact();
                           showDialog(
                             context: context,
                             barrierDismissible: true,
                             builder: (dCtx) => AlertDialog(
-                              title: const Text('الفريق الفائز'),
+                              title: const Text('من الفريق الفائز؟', textAlign: TextAlign.center),
                               actions: [
                                 TextButton(
                                   onPressed: () {
                                     Navigator.pop(dCtx);
                                     setState(() => showConfetti = true);
-                                    _shareCardDialog('$t1p1 و $t1p2', '$t2p1 و $t2p2', tot1, tot2);
-                                    save('منتهية', 1);
+                                    _shareCardDialog('$t1p1 و $t1p2', '$t2p1 و $t2p2', tot1, tot2, 1);
                                   },
                                   child: Text('$t1p1 و $t1p2'),
                                 ),
@@ -1116,8 +1171,7 @@ class _MatchScreenState extends State<MatchScreen> {
                                   onPressed: () {
                                     Navigator.pop(dCtx);
                                     setState(() => showConfetti = true);
-                                    _shareCardDialog('$t2p1 و $t2p2', '$t1p1 و $t1p2', tot2, tot1);
-                                    save('منتهية', 2);
+                                    _shareCardDialog('$t2p1 و $t2p2', '$t1p1 و $t1p2', tot2, tot1, 2);
                                   },
                                   child: Text('$t2p1 و $t2p2'),
                                 ),
@@ -1125,7 +1179,6 @@ class _MatchScreenState extends State<MatchScreen> {
                             ),
                           );
                         },
-                        child: const Text('انتهى'),
                       ),
                     )
                   ],
