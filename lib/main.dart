@@ -393,7 +393,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 }
 
 // -------------------------------------------------------------
-// 2. بوابة الكروبات (مع رمز المشرف PIN)
+// 2. بوابة الكروبات
 // -------------------------------------------------------------
 class GroupSelectScreen extends StatefulWidget {
   const GroupSelectScreen({super.key});
@@ -759,7 +759,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 }
 
 // -------------------------------------------------------------
-// شاشة المشاهد المباشر (Live Spectator Mode)
+// شاشة المشاهد المباشر
 // -------------------------------------------------------------
 class LiveSpectatorScreen extends StatefulWidget {
   const LiveSpectatorScreen({super.key});
@@ -865,7 +865,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
 }
 
 // -------------------------------------------------------------
-// الشاشات التكميلية (تحديد اللاعبين، وسقف النقاط)
+// تحديد اللاعبين وسقف النقاط
 // -------------------------------------------------------------
 class SetupPlayersScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -1068,7 +1068,7 @@ class _MatchScreenState extends State<MatchScreen> {
 
   void save(String status, int win) async {
     var m = GameMatch(
-      id: id, t1p1: t1p1, t1p2: t1p2, t2p1: t2p1, t2p2: t2p2,
+      id: id, t1p1: t1p1, t1p2: t1p2, t2p1: t2p2, t2p2: t2p2,
       rounds: List.from(rounds), current1: c1.text, current2: c2.text,
       status: status, winner: win, targetScore: target,
     );
@@ -1212,7 +1212,7 @@ class _MatchScreenState extends State<MatchScreen> {
 }
 
 // -------------------------------------------------------------
-// مؤثر القصاصات الاحتفالية المدمج (Confetti Overlay)
+// مؤثر القصاصات الاحتفالية المدمج (تم تصحيح الألوان)
 // -------------------------------------------------------------
 class CustomConfettiOverlay extends StatefulWidget {
   const CustomConfettiOverlay({super.key});
@@ -1223,7 +1223,7 @@ class CustomConfettiOverlay extends StatefulWidget {
 
 class _CustomConfettiOverlayState extends State<CustomConfettiOverlay> with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
-  final List<Color> colors = [Colors.red, Colors.gold, Colors.blue, Colors.green, Colors.purple, Colors.orange];
+  final List<Color> colors = [Colors.red, const Color(0xFFD4AF37), Colors.blue, Colors.green, Colors.purple, Colors.orange];
   final random = Random();
 
   @override
