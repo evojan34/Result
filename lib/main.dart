@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -25,6 +27,7 @@ class GameMatch {
   List<GameRound> rounds;
   String current1, current2, status;
   int winner;
+  int targetScore;
 
   GameMatch({
     required this.id,
@@ -37,6 +40,7 @@ class GameMatch {
     this.current2 = '',
     required this.status,
     this.winner = 0,
+    this.targetScore = 101,
   });
 
   int get total1 => rounds.fold(0, (a, b) => a + b.s1) + (int.tryParse(current1) ?? 0);
@@ -53,6 +57,7 @@ class GameMatch {
         'current2': current2,
         'status': status,
         'winner': winner,
+        'targetScore': targetScore,
       };
 
   factory GameMatch.fromJson(Map<String, dynamic> j) => GameMatch(
@@ -68,6 +73,7 @@ class GameMatch {
         current2: j['current2'] ?? '',
         status: j['status'] ?? 'مؤجلة',
         winner: j['winner'] ?? 0,
+        targetScore: j['targetScore'] ?? 101,
       );
 }
 
@@ -76,17 +82,23 @@ List<GameMatch> soloMatchesList = [];
 class GroupData {
   String code;
   String name;
+  String adminPin;
   List<GameMatch> matches = [];
-  GroupData({required this.code, required this.name});
+  GroupData({required this.code, required this.name, this.adminPin = '1234'});
 
   Map<String, dynamic> toJson() => {
         'code': code,
         'name': name,
+        'adminPin': adminPin,
         'matches': matches.map((m) => m.toJson()).toList(),
       };
 
   factory GroupData.fromJson(Map<String, dynamic> j) {
-    var g = GroupData(code: j['code'] ?? '', name: j['name'] ?? 'كروب');
+    var g = GroupData(
+      code: j['code'] ?? '',
+      name: j['name'] ?? 'كروب',
+      adminPin: j['adminPin'] ?? '1234',
+    );
     if (j['matches'] != null) {
       g.matches = (j['matches'] as List)
           .map((m) => GameMatch.fromJson(Map<String, dynamic>.from(m)))
@@ -97,7 +109,7 @@ class GroupData {
 }
 
 // -------------------------------------------------------------
-// محرك السحابة والتحديثات المستقبلية
+// محرك السحابة والتحديثات
 // -------------------------------------------------------------
 class CloudStorage {
   static const String host = 'https://games-242da-default-rtdb.firebaseio.com';
@@ -107,7 +119,6 @@ class CloudStorage {
     return base64Url.encode(utf8.encode(code.trim().toLowerCase())).replaceAll('=', '');
   }
 
-  // فحص التحديثات الجديدة عبر السحابة
   static Future<Map<String, dynamic>?> checkForUpdates() async {
     try {
       final client = HttpClient();
@@ -129,7 +140,6 @@ class CloudStorage {
     return null;
   }
 
-  // حفظ الكروب في قاعدة بياناتك
   static Future<bool> saveGroup(GroupData group) async {
     try {
       final key = _formatKey(group.code);
@@ -147,7 +157,6 @@ class CloudStorage {
     }
   }
 
-  // استرجاع الكروب
   static Future<GroupData?> fetchGroup(String code) async {
     try {
       final key = _formatKey(code);
@@ -171,7 +180,6 @@ class CloudStorage {
     return null;
   }
 
-  // حذف الكروب نهائياً
   static Future<void> deleteGroup(String code) async {
     try {
       final key = _formatKey(code);
@@ -187,12 +195,13 @@ class CloudStorage {
 class GroupManager {
   static GroupData? activeGroup;
 
-  static Future<bool> createGroup(String name, String code) async {
+  static Future<bool> createGroup(String name, String code, String pin) async {
     String cleanName = name.trim();
     String cleanCode = code.trim();
+    String cleanPin = pin.trim().isEmpty ? '1234' : pin.trim();
     if (cleanName.isEmpty || cleanCode.isEmpty) return false;
 
-    var newGroup = GroupData(code: cleanCode, name: cleanName);
+    var newGroup = GroupData(code: cleanCode, name: cleanName, adminPin: cleanPin);
     activeGroup = newGroup;
     await CloudStorage.saveGroup(newGroup);
     return true;
@@ -233,7 +242,7 @@ class MyApp extends StatelessWidget {
 }
 
 // -------------------------------------------------------------
-// 1. الشاشة الرئيسية مع نظام فحص التحديثات
+// 1. الشاشة الرئيسية
 // -------------------------------------------------------------
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({super.key});
@@ -254,12 +263,11 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     });
   }
 
-  // فحص إصدار التطبيق وعرض نافذة التحديث
   void _checkUpdateAlert() async {
     final updateInfo = await CloudStorage.checkForUpdates();
     if (updateInfo != null && mounted) {
       String latest = updateInfo['version'] ?? '1.0.0';
-      String note = updateInfo['notes'] ?? 'يوجد إصدار جديد من تطبيق Natija بميزات إضافية!';
+      String note = updateInfo['notes'] ?? 'يوجد إصدار جديد من تطبيق Natija!';
       String url = updateInfo['url'] ?? '';
 
       if (latest != CloudStorage.currentVersion) {
@@ -330,6 +338,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                     icon: const Icon(Icons.add_circle, color: Color(0xFFD4AF37)),
                     label: const Text('لعبة جديدة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     onPressed: () {
+                      HapticFeedback.lightImpact();
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const SetupPlayersScreen(isGroupGame: false)),
@@ -347,6 +356,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                     icon: const Icon(Icons.history, color: Colors.amber),
                     label: Text('الألعاب السابقة (${soloMatchesList.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     onPressed: () {
+                      HapticFeedback.lightImpact();
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const PastMatchesScreen(isGroupGame: false)),
@@ -365,6 +375,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                     icon: const Icon(Icons.cloud_sync, size: 28, color: Colors.black87),
                     label: const Text('لعبة الكروب (سحابي)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                     onPressed: () {
+                      HapticFeedback.mediumImpact();
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const GroupSelectScreen()),
@@ -382,7 +393,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 }
 
 // -------------------------------------------------------------
-// 2. بوابة الكروبات
+// 2. بوابة الكروبات (مع رمز المشرف PIN)
 // -------------------------------------------------------------
 class GroupSelectScreen extends StatefulWidget {
   const GroupSelectScreen({super.key});
@@ -394,6 +405,7 @@ class GroupSelectScreen extends StatefulWidget {
 class _GroupSelectScreenState extends State<GroupSelectScreen> {
   final TextEditingController createNameCtrl = TextEditingController();
   final TextEditingController customCodeCtrl = TextEditingController();
+  final TextEditingController customPinCtrl = TextEditingController();
   final TextEditingController enterCodeCtrl = TextEditingController();
   bool _isLoading = false;
 
@@ -401,6 +413,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
   void dispose() {
     createNameCtrl.dispose();
     customCodeCtrl.dispose();
+    customPinCtrl.dispose();
     enterCodeCtrl.dispose();
     super.dispose();
   }
@@ -408,6 +421,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
   void _handleCreate() async {
     String name = createNameCtrl.text.trim();
     String code = customCodeCtrl.text.trim();
+    String pin = customPinCtrl.text.trim().isEmpty ? '1234' : customPinCtrl.text.trim();
 
     if (name.isEmpty || code.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('يرجى كتابة اسم الكروب والرمز السري')));
@@ -415,7 +429,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
     }
 
     setState(() => _isLoading = true);
-    await GroupManager.createGroup(name, code);
+    await GroupManager.createGroup(name, code, pin);
     setState(() => _isLoading = false);
 
     Navigator.pushReplacement(
@@ -525,7 +539,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  const Icon(Icons.cloud_done, size: 64, color: Color(0xFF8B1E22)),
+                  const Icon(Icons.shield_outlined, size: 64, color: Color(0xFF8B1E22)),
                   const SizedBox(height: 12),
                   const Text(
                     'الكروبات تحفظ وتسترجع تلقائياً من السحابة عبر الرمز السري واسم الكروب',
@@ -544,7 +558,13 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
                           const Divider(height: 18),
                           TextField(controller: createNameCtrl, decoration: const InputDecoration(hintText: 'اسم الكروب', border: OutlineInputBorder())),
                           const SizedBox(height: 12),
-                          TextField(controller: customCodeCtrl, decoration: const InputDecoration(hintText: 'الرمز السري المخصص', border: OutlineInputBorder())),
+                          TextField(controller: customCodeCtrl, decoration: const InputDecoration(hintText: 'الرمز السري المخصص للكروب', border: OutlineInputBorder())),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: customPinCtrl,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(hintText: 'رمز المشرف السري (Admin PIN) للحذف والتصفير', border: OutlineInputBorder()),
+                          ),
                           const SizedBox(height: 14),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
@@ -610,27 +630,50 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     }
   }
 
-  void _confirmDeleteGroup() {
+  void _verifyAdminAndExecute(String actionTitle, Function onVerified) {
+    final TextEditingController pinCtrl = TextEditingController();
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (ctx) => AlertDialog(
-        title: const Text('مسح الكروب نهائياً', textAlign: TextAlign.center),
-        content: const Text('هل أنت متأكد من مسح هذا الكروب من السيرفر نهائياً؟ لن يستطيع أحد الدخول إليه بعد ذلك.'),
+        title: Text(actionTitle, textAlign: TextAlign.center),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('أدخل رمز المشرف السري (Admin PIN) للمتابعة:', textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            TextField(
+              controller: pinCtrl,
+              keyboardType: TextInputType.number,
+              obscureText: true,
+              decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'PIN'),
+            ),
+          ],
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () async {
-              await GroupManager.deleteActiveGroup();
-              Navigator.pop(ctx);
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const GroupSelectScreen()));
+            onPressed: () {
+              if (pinCtrl.text.trim() == (GroupManager.activeGroup?.adminPin ?? '1234')) {
+                Navigator.pop(ctx);
+                onVerified();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('رمز المشرف غير صحيح!')));
+              }
             },
-            child: const Text('نعم، مسح الكروب'),
-          ),
+            child: const Text('تأكيد'),
+          )
         ],
       ),
     );
+  }
+
+  void _confirmDeleteGroup() {
+    _verifyAdminAndExecute('مسح الكروب نهائياً', () async {
+      await GroupManager.deleteActiveGroup();
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const GroupSelectScreen()));
+    });
   }
 
   @override
@@ -673,24 +716,37 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                 icon: const Icon(Icons.play_circle_fill, color: Color(0xFFD4AF37)),
                 label: const Text('لعبة جديدة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 onPressed: () {
+                  HapticFeedback.lightImpact();
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const SetupPlayersScreen(isGroupGame: true))).then((_) => setState(() {}));
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo.shade900, foregroundColor: Colors.white, padding: const EdgeInsets.all(16)),
+                icon: const Icon(Icons.live_tv, color: Colors.redAccent),
+                label: const Text('المشاهد المباشر (Live Spectator)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveSpectatorScreen()));
+                },
+              ),
+              const SizedBox(height: 14),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, foregroundColor: Colors.white, padding: const EdgeInsets.all(16)),
                 icon: const Icon(Icons.history, color: Colors.amber),
                 label: Text('لعبات سابقة ($matchesCount)', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 onPressed: () {
+                  HapticFeedback.lightImpact();
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const PastMatchesScreen(isGroupGame: true))).then((_) => setState(() {}));
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16)),
                 icon: const Icon(Icons.bar_chart, color: Color(0xFF8B1E22)),
-                label: const Text('إحصائيات (لاعب ضد لاعب)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))),
+                label: const Text('إحصائيات وألقاب اللاعبين', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))),
                 onPressed: () {
+                  HapticFeedback.lightImpact();
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const HeadToHeadScreen())).then((_) => setState(() {}));
                 },
               ),
@@ -703,7 +759,113 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 }
 
 // -------------------------------------------------------------
-// الشاشات المتبقية (تحديد اللاعبين، شاشة المباراة، السجل، والإحصائيات)
+// شاشة المشاهد المباشر (Live Spectator Mode)
+// -------------------------------------------------------------
+class LiveSpectatorScreen extends StatefulWidget {
+  const LiveSpectatorScreen({super.key});
+
+  @override
+  State<LiveSpectatorScreen> createState() => _LiveSpectatorScreenState();
+}
+
+class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
+  Timer? _timer;
+  GameMatch? currentLiveMatch;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLive();
+    _timer = Timer.periodic(const Duration(seconds: 4), (_) => _fetchLive());
+  }
+
+  void _fetchLive() async {
+    if (GroupManager.activeGroup != null) {
+      var g = await CloudStorage.fetchGroup(GroupManager.activeGroup!.code);
+      if (g != null && mounted) {
+        setState(() {
+          GroupManager.activeGroup = g;
+          var activeList = g.matches.where((m) => m.status == 'مؤجلة').toList();
+          currentLiveMatch = activeList.isNotEmpty ? activeList.first : (g.matches.isNotEmpty ? g.matches.first : null);
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.fiber_manual_record, color: Colors.red, size: 16),
+            SizedBox(width: 8),
+            Text('بث النتيجة المباشر'),
+          ],
+        ),
+        backgroundColor: Colors.black87,
+        foregroundColor: Colors.white,
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : currentLiveMatch == null
+              ? const Center(child: Text('لا توجد مباراة جارية حالياً للبث.', style: TextStyle(fontSize: 16)))
+              : Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      color: Colors.red.shade900,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          Column(
+                            children: [
+                              Text('${currentLiveMatch!.t1p1} & ${currentLiveMatch!.t1p2}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              Text('${currentLiveMatch!.total1}', style: const TextStyle(fontSize: 34, color: Colors.amber, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          const Text('VS', style: TextStyle(color: Colors.white70, fontSize: 20, fontWeight: FontWeight.bold)),
+                          Column(
+                            children: [
+                              Text('${currentLiveMatch!.t2p1} & ${currentLiveMatch!.t2p2}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              Text('${currentLiveMatch!.total2}', style: const TextStyle(fontSize: 34, color: Colors.amber, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text('الهدف: ${currentLiveMatch!.targetScore} نقطة | الحالة: ${currentLiveMatch!.status}', style: const TextStyle(color: Colors.grey)),
+                    ),
+                    const Divider(),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: currentLiveMatch!.rounds.length,
+                        itemBuilder: (_, i) => ListTile(
+                          leading: Text('${currentLiveMatch!.rounds[i].s1}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                          title: Center(child: Text('جولة ${i + 1}')),
+                          trailing: Text('${currentLiveMatch!.rounds[i].s2}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                        ),
+                      ),
+                    )
+                  ],
+                ),
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// الشاشات التكميلية (تحديد اللاعبين، وسقف النقاط)
 // -------------------------------------------------------------
 class SetupPlayersScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -715,6 +877,7 @@ class SetupPlayersScreen extends StatefulWidget {
 
 class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
   final p1 = TextEditingController(), p2 = TextEditingController(), p3 = TextEditingController(), p4 = TextEditingController();
+  int _targetScore = 101;
 
   @override
   void dispose() {
@@ -736,6 +899,18 @@ class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
           TextField(controller: p3, decoration: const InputDecoration(labelText: 'الفريق الثاني - لاعب 1', border: OutlineInputBorder())),
           const SizedBox(height: 8),
           TextField(controller: p4, decoration: const InputDecoration(labelText: 'الفريق الثاني - لاعب 2', border: OutlineInputBorder())),
+          const SizedBox(height: 20),
+          DropdownButtonFormField<int>(
+            value: _targetScore,
+            decoration: const InputDecoration(labelText: 'سقف النقاط للفوز (Target Score)', border: OutlineInputBorder()),
+            items: const [
+              DropdownMenuItem(value: 61, child: Text('61 نقطة')),
+              DropdownMenuItem(value: 101, child: Text('101 نقطة')),
+              DropdownMenuItem(value: 151, child: Text('151 نقطة')),
+              DropdownMenuItem(value: 201, child: Text('201 نقطة')),
+            ],
+            onChanged: (val) => setState(() => _targetScore = val ?? 101),
+          ),
           const SizedBox(height: 24),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, padding: const EdgeInsets.all(16)),
@@ -745,6 +920,7 @@ class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
                 MaterialPageRoute(
                   builder: (_) => MatchScreen(
                     isGroupGame: widget.isGroupGame,
+                    targetScore: _targetScore,
                     names: [
                       p1.text.trim().isEmpty ? 'لاعب 1' : p1.text.trim(),
                       p2.text.trim().isEmpty ? 'لاعب 2' : p2.text.trim(),
@@ -763,12 +939,16 @@ class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
   }
 }
 
+// -------------------------------------------------------------
+// شاشة تسجيل النقاط مع القصاصات الاحتفالية والاهتزاز والمشاركة
+// -------------------------------------------------------------
 class MatchScreen extends StatefulWidget {
   final bool isGroupGame;
   final List<String>? names;
   final GameMatch? matchToResume;
+  final int targetScore;
 
-  const MatchScreen({super.key, required this.isGroupGame, this.names, this.matchToResume});
+  const MatchScreen({super.key, required this.isGroupGame, this.names, this.matchToResume, this.targetScore = 101});
 
   @override
   State<MatchScreen> createState() => _MatchScreenState();
@@ -778,6 +958,8 @@ class _MatchScreenState extends State<MatchScreen> {
   late String id, t1p1, t1p2, t2p1, t2p2;
   List<GameRound> rounds = [];
   final c1 = TextEditingController(), c2 = TextEditingController();
+  late int target;
+  bool showConfetti = false;
 
   @override
   void initState() {
@@ -787,10 +969,12 @@ class _MatchScreenState extends State<MatchScreen> {
       id = m.id; t1p1 = m.t1p1; t1p2 = m.t1p2; t2p1 = m.t2p1; t2p2 = m.t2p2;
       rounds = List.from(m.rounds);
       c1.text = m.current1; c2.text = m.current2;
+      target = m.targetScore;
     } else {
       id = DateTime.now().millisecondsSinceEpoch.toString();
       t1p1 = widget.names![0]; t1p2 = widget.names![1];
       t2p1 = widget.names![2]; t2p2 = widget.names![3];
+      target = widget.targetScore;
     }
   }
 
@@ -802,6 +986,52 @@ class _MatchScreenState extends State<MatchScreen> {
 
   int get tot1 => rounds.fold(0, (a, b) => a + b.s1) + (int.tryParse(c1.text) ?? 0);
   int get tot2 => rounds.fold(0, (a, b) => a + b.s2) + (int.tryParse(c2.text) ?? 0);
+
+  void _shareCardDialog(String winnerText, String loserText, int wScore, int lScore) {
+    String cardText = '''
+🏆 **بطاقة نتيجة Natija** 🏆
+━━━━━━━━━━━━━━━
+👑 الفائزون: $winnerText ($wScore)
+💔 الخاسرون: $loserText ($lScore)
+🎯 الهدف: $target نقطة
+━━━━━━━━━━━━━━━
+سُجلت عبر تطبيق Natija 🎲
+''';
+
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        title: const Text('بطاقة ملخص المباراة', textAlign: TextAlign.center),
+        content: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: const Color(0xFF8B1E22), borderRadius: BorderRadius.circular(12)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.emoji_events, color: Colors.amber, size: 48),
+              const SizedBox(height: 8),
+              Text('الفائز: $winnerText ($wScore)', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 4),
+              Text('الخاسر: $loserText ($lScore)', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق')),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.copy),
+            label: const Text('نسخ للمشاركة'),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: cardText));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ بطاقة النتيجة بنجاح!')));
+              Navigator.pop(ctx);
+            },
+          )
+        ],
+      ),
+    );
+  }
 
   void _editRound(int index) {
     var edit1 = TextEditingController(text: '${rounds[index].s1}');
@@ -840,7 +1070,7 @@ class _MatchScreenState extends State<MatchScreen> {
     var m = GameMatch(
       id: id, t1p1: t1p1, t1p2: t1p2, t2p1: t2p1, t2p2: t2p2,
       rounds: List.from(rounds), current1: c1.text, current2: c2.text,
-      status: status, winner: win,
+      status: status, winner: win, targetScore: target,
     );
 
     if (widget.isGroupGame) {
@@ -853,111 +1083,200 @@ class _MatchScreenState extends State<MatchScreen> {
       if (idx != -1) soloMatchesList[idx] = m; else soloMatchesList.insert(0, m);
     }
 
-    Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('تسجيل اللعبة'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
-      body: Column(
+      appBar: AppBar(title: Text('تسجيل اللعبة (هدف: $target)'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
+      body: Stack(
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.red.shade50,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                Column(children: [Text('$t1p1 & $t1p2', style: const TextStyle(fontWeight: FontWeight.bold)), Text('$tot1', style: const TextStyle(fontSize: 26, color: Color(0xFF8B1E22), fontWeight: FontWeight.bold))]),
-                const Text('المجموع', style: TextStyle(fontWeight: FontWeight.bold)),
-                Column(children: [Text('$t2p1 & $t2p2', style: const TextStyle(fontWeight: FontWeight.bold)), Text('$tot2', style: const TextStyle(fontSize: 26, color: Color(0xFF8B1E22), fontWeight: FontWeight.bold))]),
-              ],
-            ),
-          ),
-          Expanded(
-            child: ListView(
-              children: [
-                for (int i = 0; i < rounds.length; i++)
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Text('${rounds[i].s1}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('لعبة ${i + 1} ', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            IconButton(icon: const Icon(Icons.edit, size: 18, color: Colors.blue), onPressed: () => _editRound(i)),
-                            IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () => setState(() => rounds.removeAt(i))),
-                          ],
-                        ),
-                        Text('${rounds[i].s2}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Expanded(child: TextField(controller: c1, keyboardType: TextInputType.number, textAlign: TextAlign.center, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: '0'), onChanged: (_) => setState(() {}))),
-                      Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text('لعبة ${rounds.length + 1}')),
-                      Expanded(child: TextField(controller: c2, keyboardType: TextInputType.number, textAlign: TextAlign.center, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: '0'), onChanged: (_) => setState(() {}))),
-                    ],
-                  ),
+          Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                color: Colors.red.shade50,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(children: [Text('$t1p1 & $t1p2', style: const TextStyle(fontWeight: FontWeight.bold)), Text('$tot1', style: TextStyle(fontSize: 26, color: tot1 >= target ? Colors.green : const Color(0xFF8B1E22), fontWeight: FontWeight.bold))]),
+                    const Text('المجموع', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Column(children: [Text('$t2p1 & $t2p2', style: const TextStyle(fontWeight: FontWeight.bold)), Text('$tot2', style: TextStyle(fontSize: 26, color: tot2 >= target ? Colors.green : const Color(0xFF8B1E22), fontWeight: FontWeight.bold))]),
+                  ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
-                    onPressed: () {
-                      setState(() {
-                        rounds.add(GameRound(int.tryParse(c1.text) ?? 0, int.tryParse(c2.text) ?? 0));
-                        c1.clear(); c2.clear();
-                      });
-                    },
-                    child: Text('تأكيد لعبة ${rounds.length + 1} وفتح التالية'),
-                  ),
-                )
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(child: OutlinedButton(onPressed: () => save('مؤجلة', 0), child: const Text('تأجيل'))),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        barrierDismissible: true,
-                        builder: (_) => AlertDialog(
-                          title: const Text('الفريق الفائز'),
-                          actions: [
-                            TextButton(onPressed: () { Navigator.pop(context); save('منتهية', 1); }, child: Text('$t1p1 و $t1p2')),
-                            TextButton(onPressed: () { Navigator.pop(context); save('منتهية', 2); }, child: Text('$t2p1 و $t2p2')),
+              ),
+              Expanded(
+                child: ListView(
+                  children: [
+                    for (int i = 0; i < rounds.length; i++)
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            Text('${rounds[i].s1}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('لعبة ${i + 1} ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                IconButton(icon: const Icon(Icons.edit, size: 18, color: Colors.blue), onPressed: () => _editRound(i)),
+                                IconButton(icon: const Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () => setState(() => rounds.removeAt(i))),
+                              ],
+                            ),
+                            Text('${rounds[i].s2}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                           ],
                         ),
-                      );
-                    },
-                    child: const Text('انتهى'),
-                  ),
-                )
-              ],
-            ),
-          )
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Expanded(child: TextField(controller: c1, keyboardType: TextInputType.number, textAlign: TextAlign.center, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: '0'), onChanged: (_) => setState(() {}))),
+                          Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text('لعبة ${rounds.length + 1}')),
+                          Expanded(child: TextField(controller: c2, keyboardType: TextInputType.number, textAlign: TextAlign.center, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: '0'), onChanged: (_) => setState(() {}))),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
+                        onPressed: () {
+                          HapticFeedback.lightImpact();
+                          setState(() {
+                            rounds.add(GameRound(int.tryParse(c1.text) ?? 0, int.tryParse(c2.text) ?? 0));
+                            c1.clear(); c2.clear();
+                          });
+                        },
+                        child: Text('تأكيد لعبة ${rounds.length + 1} وفتح التالية'),
+                      ),
+                    )
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Expanded(child: OutlinedButton(onPressed: () => save('مؤجلة', 0), child: const Text('تأجيل'))),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                        onPressed: () {
+                          HapticFeedback.heavyImpact();
+                          showDialog(
+                            context: context,
+                            barrierDismissible: true,
+                            builder: (dCtx) => AlertDialog(
+                              title: const Text('الفريق الفائز'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(dCtx);
+                                    setState(() => showConfetti = true);
+                                    _shareCardDialog('$t1p1 و $t1p2', '$t2p1 و $t2p2', tot1, tot2);
+                                    save('منتهية', 1);
+                                  },
+                                  child: Text('$t1p1 و $t1p2'),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(dCtx);
+                                    setState(() => showConfetti = true);
+                                    _shareCardDialog('$t2p1 و $t2p2', '$t1p1 و $t1p2', tot2, tot1);
+                                    save('منتهية', 2);
+                                  },
+                                  child: Text('$t2p1 و $t2p2'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        child: const Text('انتهى'),
+                      ),
+                    )
+                  ],
+                ),
+              )
+            ],
+          ),
+          if (showConfetti) const CustomConfettiOverlay(),
         ],
       ),
     );
   }
 }
 
+// -------------------------------------------------------------
+// مؤثر القصاصات الاحتفالية المدمج (Confetti Overlay)
+// -------------------------------------------------------------
+class CustomConfettiOverlay extends StatefulWidget {
+  const CustomConfettiOverlay({super.key});
+
+  @override
+  State<CustomConfettiOverlay> createState() => _CustomConfettiOverlayState();
+}
+
+class _CustomConfettiOverlayState extends State<CustomConfettiOverlay> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  final List<Color> colors = [Colors.red, Colors.gold, Colors.blue, Colors.green, Colors.purple, Colors.orange];
+  final random = Random();
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (ctx, child) {
+          return CustomPaint(
+            size: Size.infinite,
+            painter: ConfettiPainter(_ctrl.value, colors, random),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class ConfettiPainter extends CustomPainter {
+  final double progress;
+  final List<Color> colors;
+  final Random random;
+  ConfettiPainter(this.progress, this.colors, this.random);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (int i = 0; i < 40; i++) {
+      final paint = Paint()..color = colors[i % colors.length];
+      double x = (size.width / 40) * i + sin(progress * 4 + i) * 20;
+      double y = progress * size.height * (0.8 + (i % 5) * 0.1);
+      canvas.drawCircle(Offset(x, y), 5, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// -------------------------------------------------------------
+// سجل الألعاب السابقة
+// -------------------------------------------------------------
 class PastMatchesScreen extends StatefulWidget {
   final bool isGroupGame;
   const PastMatchesScreen({super.key, required this.isGroupGame});
@@ -989,7 +1308,7 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
                   margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   child: ListTile(
                     title: Text('${match.t1p1} & ${match.t1p2} ضد ${match.t2p1} & ${match.t2p2}'),
-                    subtitle: Text('الحالة: ${match.status} | النتيجة: ${match.total1} - ${match.total2}'),
+                    subtitle: Text('الحالة: ${match.status} | النتيجة: ${match.total1} - ${match.total2} | هدف: ${match.targetScore}'),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1045,6 +1364,9 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
   }
 }
 
+// -------------------------------------------------------------
+// شاشة إحصائيات وألقاب اللاعبين والشراكات (Gamification)
+// -------------------------------------------------------------
 class HeadToHeadScreen extends StatefulWidget {
   const HeadToHeadScreen({super.key});
 
@@ -1088,30 +1410,78 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
     return stats;
   }
 
+  Map<String, String> getSpecialTitles() {
+    var matches = GroupManager.activeGroup?.matches.where((x) => x.status == 'منتهية').toList() ?? [];
+    if (matches.isEmpty) return {};
+
+    Map<String, int> wins = {};
+    Map<String, int> losses = {};
+    Map<String, int> duoWins = {};
+
+    for (var m in matches) {
+      String p1 = m.t1p1, p2 = m.t1p2, p3 = m.t2p1, p4 = m.t2p2;
+      String d1 = p1.compareTo(p2) < 0 ? '$p1 & $p2' : '$p2 & $p1';
+      String d2 = p3.compareTo(p4) < 0 ? '$p3 & $p4' : '$p4 & $p3';
+
+      if (m.winner == 1) {
+        wins[p1] = (wins[p1] ?? 0) + 1;
+        wins[p2] = (wins[p2] ?? 0) + 1;
+        losses[p3] = (losses[p3] ?? 0) + 1;
+        losses[p4] = (losses[p4] ?? 0) + 1;
+        duoWins[d1] = (duoWins[d1] ?? 0) + 1;
+      } else if (m.winner == 2) {
+        wins[p3] = (wins[p3] ?? 0) + 1;
+        wins[p4] = (wins[p4] ?? 0) + 1;
+        losses[p1] = (losses[p1] ?? 0) + 1;
+        losses[p2] = (losses[p2] ?? 0) + 1;
+        duoWins[d2] = (duoWins[d2] ?? 0) + 1;
+      }
+    }
+
+    String executioner = wins.entries.isNotEmpty ? wins.entries.reduce((a, b) => a.value > b.value ? a : b).key : 'لا يوجد';
+    String victim = losses.entries.isNotEmpty ? losses.entries.reduce((a, b) => a.value > b.value ? a : b).key : 'لا يوجد';
+    String bestDuo = duoWins.entries.isNotEmpty ? duoWins.entries.reduce((a, b) => a.value > b.value ? a : b).key : 'لا يوجد';
+
+    return {
+      'executioner': executioner,
+      'victim': victim,
+      'bestDuo': bestDuo,
+    };
+  }
+
   void _resetStats() {
+    final TextEditingController pinCtrl = TextEditingController();
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (ctx) => AlertDialog(
-        title: const Text('تصفير ومسح الإحصائيات', textAlign: TextAlign.center),
-        content: const Text(
-          'هل تريد مسح سجل نتائج المواجهات؟ سيتم تصفير النتائج ومزامنتها سحابياً عند الجميع.',
-          textAlign: TextAlign.center,
+        title: const Text('تصفير الإحصائيات (رمز المشرف)', textAlign: TextAlign.center),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('أدخل رمز المشرف PIN لتأكيد تصفير الإحصائيات:'),
+            const SizedBox(height: 12),
+            TextField(controller: pinCtrl, keyboardType: TextInputType.number, obscureText: true, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'PIN')),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () async {
-              setState(() {
-                GroupManager.activeGroup?.matches.removeWhere((m) => m.status == 'منتهية');
-                chosenPlayer = null;
-              });
-              await GroupManager.updateActiveGroup();
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تصفير الإحصائيات بنجاح')));
+              if (pinCtrl.text.trim() == (GroupManager.activeGroup?.adminPin ?? '1234')) {
+                setState(() {
+                  GroupManager.activeGroup?.matches.removeWhere((m) => m.status == 'منتهية');
+                  chosenPlayer = null;
+                });
+                await GroupManager.updateActiveGroup();
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تصفير الإحصائيات بنجاح')));
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('رمز المشرف غير صحيح!')));
+              }
             },
-            child: const Text('نعم، مسح وتصفير'),
+            child: const Text('تصفير'),
           ),
         ],
       ),
@@ -1123,10 +1493,11 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
     final players = finishedPlayers;
     if (chosenPlayer == null && players.isNotEmpty) chosenPlayer = players.first;
     final stats = (chosenPlayer != null) ? calculateStats(chosenPlayer!) : {};
+    final titles = getSpecialTitles();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('إحصائيات الكروب (لاعب ضد لاعب)'),
+        title: const Text('إحصائيات وألقاب الكروب'),
         backgroundColor: const Color(0xFF8B1E22),
         foregroundColor: Colors.white,
         actions: [
@@ -1142,13 +1513,31 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
           ? const Center(
               child: Padding(
                 padding: EdgeInsets.all(20),
-                child: Text('لا توجد إحصائيات حالياً.\nأنهِ مباراة واضغط "انتهى" لاحتساب النتائج.', textAlign: TextAlign.center),
+                child: Text('لا توجد إحصائيات حالياً.\nأنهِ مباراة واضغط "انتهى" لاحتساب النتائج وتوليد الألقاب.', textAlign: TextAlign.center),
               ),
             )
           : Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.amber)),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            Text('⚔️ الجلّاد: ${titles['executioner']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+                            Text('🎯 الضحية: ${titles['victim']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text('🤝 أفضل ثنائي: ${titles['bestDuo']}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(border: Border.all(color: const Color(0xFF8B1E22)), borderRadius: BorderRadius.circular(8)),
@@ -1161,7 +1550,7 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   Expanded(
                     child: stats.isEmpty
                         ? const Center(child: Text('لا توجد مواجهات مسجلة لهذا اللاعب.'))
