@@ -10,7 +10,7 @@ void main() {
 }
 
 // -------------------------------------------------------------
-// إعدادات التطبيق والحفظ الداخلي (لتجنب المكتبات وأخطاء البناء)
+// إعدادات التطبيق والحفظ الداخلي (بدون مكتبات لتجنب أخطاء البناء)
 // -------------------------------------------------------------
 class AppSettings {
   static String myName = 'لاعب 1';
@@ -91,7 +91,7 @@ class GroupData {
 }
 
 // -------------------------------------------------------------
-// محرك السحابة
+// محرك السحابة وإدارة الكروبات
 // -------------------------------------------------------------
 class CloudStorage {
   static const String host = 'https://games-242da-default-rtdb.firebaseio.com';
@@ -161,7 +161,7 @@ class GroupManager {
 }
 
 // -------------------------------------------------------------
-// التطبيق الرئيسي
+// التطبيق الرئيسي (ثيم موحد عصري للكل)
 // -------------------------------------------------------------
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -170,7 +170,21 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Natija',
-      theme: ThemeData(fontFamily: 'Cairo', useMaterial3: true),
+      // الثيم العام العصري للتطبيق بالكامل
+      theme: ThemeData(
+        fontFamily: 'Cairo',
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0F1522),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF161E2E),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: true,
+        ),
+        cardColor: const Color(0xFF161E2E),
+        dialogBackgroundColor: const Color(0xFF161E2E),
+        useMaterial3: true,
+      ),
       builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child!),
       home: const MainHomeScreen(),
     );
@@ -178,17 +192,10 @@ class MyApp extends StatelessWidget {
 }
 
 // -------------------------------------------------------------
-// 1. الواجهة الرئيسية
+// الأزرار والتصاميم المشتركة
 // -------------------------------------------------------------
-class MainHomeScreen extends StatefulWidget { const MainHomeScreen({super.key}); @override State<MainHomeScreen> createState() => _MainHomeScreenState(); }
-class _MainHomeScreenState extends State<MainHomeScreen> {
-  final Color bgDark = const Color(0xFF0F1522);
-  final Color cardDark = const Color(0xFF161E2E);
-  final Color neonRed = const Color(0xFFF9325D);
-  final Color neonBlue = const Color(0xFF1E3A8A);
-  final Color neonYellow = const Color(0xFFFFB300);
-
-  Widget _buildGlowButton({required String title, required String sub, required IconData icon, required Color color, required VoidCallback onTap}) {
+class SharedUI {
+  static Widget buildGlowButton({required String title, required String sub, required IconData icon, required Color color, required VoidCallback onTap}) {
     return InkWell(
       onTap: () { HapticFeedback.lightImpact(); onTap(); },
       borderRadius: BorderRadius.circular(16),
@@ -211,6 +218,28 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       ),
     );
   }
+
+  static InputDecoration inputDecor(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: Colors.white54),
+      filled: true,
+      fillColor: const Color(0xFF0F1522), // أغمق من الكارد
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    );
+  }
+}
+
+// -------------------------------------------------------------
+// 1. الواجهة الرئيسية
+// -------------------------------------------------------------
+class MainHomeScreen extends StatefulWidget { const MainHomeScreen({super.key}); @override State<MainHomeScreen> createState() => _MainHomeScreenState(); }
+class _MainHomeScreenState extends State<MainHomeScreen> {
+  final Color cardDark = const Color(0xFF161E2E);
+  final Color neonRed = const Color(0xFFF9325D);
+  final Color neonBlue = const Color(0xFF1E3A8A);
+  final Color neonYellow = const Color(0xFFFFB300);
 
   Widget _buildSmallGridItem(IconData icon, String title, String sub, Color color, VoidCallback onTap) {
     return Expanded(
@@ -236,7 +265,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: bgDark,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -275,15 +303,15 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               ),
               const SizedBox(height: 30),
 
-              _buildGlowButton(
+              SharedUI.buildGlowButton(
                 title: 'لعبة جديدة', sub: 'إبدأ حساب نتيجتك الآن', icon: Icons.add, color: neonRed,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SetupPlayersScreen(isGroupGame: false))).then((_) => setState(() {})),
               ),
-              _buildGlowButton(
+              SharedUI.buildGlowButton(
                 title: 'الألعاب السابقة (${soloMatchesList.length})', sub: 'شاهد نتائجك السابقة', icon: Icons.history, color: Colors.blueAccent,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PastMatchesScreen(isGroupGame: false))).then((_) => setState(() {})),
               ),
-              _buildGlowButton(
+              SharedUI.buildGlowButton(
                 title: 'لعبة الكروب (سحابي)', sub: 'انضم إلى لعبة جماعية', icon: Icons.casino, color: neonYellow,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GroupSelectScreen())).then((_) => setState(() {})),
               ),
@@ -292,7 +320,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               Row(
                 children: [
                   _buildSmallGridItem(Icons.bar_chart, 'إحصائياتي', 'تابع نتائجك', Colors.greenAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyStatsScreen()))),
-                  _buildSmallGridItem(Icons.people, 'أصدقائي', 'المواجهات', Colors.purpleAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FriendsScreen()))),
+                  _buildSmallGridItem(Icons.people, 'أصدقائي', 'المواجهات', Colors.purpleAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HeadToHeadScreen()))),
                   _buildSmallGridItem(Icons.stars, 'الإنجازات', 'افتح الجوائز', Colors.blue, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AchievementsScreen()))),
                   _buildSmallGridItem(Icons.settings, 'الإعدادات', 'خصص اسمك', Colors.grey, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) => setState((){}))),
                 ],
@@ -316,36 +344,12 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: BottomAppBar(
-        color: cardDark,
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8,
-        child: SizedBox(
-          height: 60,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.home, color: neonYellow), Text('الرئيسية', style: TextStyle(color: neonYellow, fontSize: 10))]),
-              Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.access_time, color: Colors.grey), const Text('التاريخ', style: TextStyle(color: Colors.grey, fontSize: 10))]),
-              const SizedBox(width: 40), 
-              Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.emoji_events_outlined, color: Colors.grey), const Text('الإنجازات', style: TextStyle(color: Colors.grey, fontSize: 10))]),
-              Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.person_outline, color: Colors.grey), const Text('حسابي', style: TextStyle(color: Colors.grey, fontSize: 10))]),
-            ],
-          ),
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: neonYellow,
-        onPressed: () {},
-        child: const Icon(Icons.add, color: Colors.black, size: 30),
-      ),
     );
   }
 }
 
 // -------------------------------------------------------------
-// الشاشات الأربعة الفرعية 
+// الشاشات الفرعية (الإعدادات، إحصائياتي، الإنجازات)
 // -------------------------------------------------------------
 class SettingsScreen extends StatefulWidget { const SettingsScreen({super.key}); @override State<SettingsScreen> createState() => _SettingsScreenState(); }
 class _SettingsScreenState extends State<SettingsScreen> {
@@ -353,23 +357,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1522),
-      appBar: AppBar(title: const Text('الإعدادات'), backgroundColor: const Color(0xFF161E2E), foregroundColor: Colors.white),
+      appBar: AppBar(title: const Text('الإعدادات')),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('اسم اللاعب الافتراضي', style: TextStyle(color: Colors.white, fontSize: 18)),
+            const Text('اسم اللاعب الافتراضي', style: TextStyle(color: Colors.white, fontSize: 16)),
             const SizedBox(height: 10),
-            TextField(
-              controller: _nameCtrl, style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(filled: true, fillColor: const Color(0xFF161E2E), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-            ),
+            TextField(controller: _nameCtrl, style: const TextStyle(color: Colors.white), decoration: SharedUI.inputDecor('اسم اللاعب')),
             const SizedBox(height: 20),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFB300), padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15)),
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFB300), padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               onPressed: () { AppSettings.myName = _nameCtrl.text.trim(); Navigator.pop(context); },
-              child: const Text('حفظ الإعدادات', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              child: const Text('حفظ الإعدادات', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
             )
           ],
         ),
@@ -392,8 +393,7 @@ class MyStatsScreen extends StatelessWidget {
       if ((isT1 && m.winner == 1) || (isT2 && m.winner == 2)) wins++; else losses++;
     }
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1522),
-      appBar: AppBar(title: const Text('إحصائياتي الشخصية'), backgroundColor: const Color(0xFF161E2E), foregroundColor: Colors.white),
+      appBar: AppBar(title: const Text('إحصائياتي الشخصية')),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -405,9 +405,9 @@ class MyStatsScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _statBox('إجمالي اللعبات', '$total', Colors.blue),
-                _statBox('مرات الفوز', '$wins', Colors.green),
-                _statBox('مرات الخسارة', '$losses', Colors.red),
+                _statBox('إجمالي اللعبات', '$total', Colors.blueAccent),
+                _statBox('مرات الفوز', '$wins', Colors.greenAccent),
+                _statBox('مرات الخسارة', '$losses', Colors.redAccent),
               ],
             )
           ],
@@ -428,15 +428,14 @@ class AchievementsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1522),
-      appBar: AppBar(title: const Text('الإنجازات والأوسمة'), backgroundColor: const Color(0xFF161E2E), foregroundColor: Colors.white),
+      appBar: AppBar(title: const Text('الإنجازات والأوسمة')),
       body: GridView.count(
         crossAxisCount: 2, padding: const EdgeInsets.all(16), crossAxisSpacing: 16, mainAxisSpacing: 16,
         children: [
-          _badge('ملك الكونكان', 'أنهيت جولة بصفر نقاط', Icons.diamond, Colors.blue),
-          _badge('الجلاد', 'فزت بـ 3 مباريات متتالية', Icons.whatshot, Colors.orange),
-          _badge('الريمونتادا', 'فزت بعد تأخر كبير', Icons.bolt, Colors.yellow),
-          _badge('المخضرم', 'لعبت أكثر من 10 مباريات', Icons.military_tech, Colors.purple),
+          _badge('ملك الكونكان', 'أنهيت جولة بصفر نقاط', Icons.diamond, Colors.blueAccent),
+          _badge('الجلاد', 'فزت بـ 3 مباريات متتالية', Icons.whatshot, Colors.orangeAccent),
+          _badge('الريمونتادا', 'فزت بعد تأخر كبير', Icons.bolt, Colors.yellowAccent),
+          _badge('المخضرم', 'لعبت أكثر من 10 مباريات', Icons.military_tech, Colors.purpleAccent),
         ],
       ),
     );
@@ -453,12 +452,12 @@ class FriendsScreen extends StatelessWidget {
   const FriendsScreen({super.key});
   @override
   Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: const Color(0xFF0F1522), appBar: AppBar(title: const Text('أصدقائي (مواجهات فردية)'), backgroundColor: const Color(0xFF161E2E), foregroundColor: Colors.white), body: const Center(child: Text('هذه الشاشة مخصصة لمواجهات الألعاب المحلية.\nيمكنك مشاهدة التفاصيل الدقيقة للمواجهات داخل كروباتك السحابية.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70))));
+    return Scaffold(appBar: AppBar(title: const Text('أصدقائي (مواجهات فردية)')), body: const Center(child: Text('يمكنك مشاهدة التفاصيل الدقيقة للمواجهات داخل شاشة الإحصائيات.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70))));
   }
 }
 
 // -------------------------------------------------------------
-// 2. بوابة الكروبات (التبويبات، تم إزالة الـ const من TabBar)
+// 2. بوابة الكروبات (التبويبات) بالثيم العصري
 // -------------------------------------------------------------
 class GroupSelectScreen extends StatefulWidget { const GroupSelectScreen({super.key}); @override State<GroupSelectScreen> createState() => _GroupSelectScreenState(); }
 class _GroupSelectScreenState extends State<GroupSelectScreen> {
@@ -482,7 +481,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
     setState(() => _isLoading = true);
     GroupData? remote = await CloudStorage.fetchGroup(code);
     setState(() => _isLoading = false);
-    if (remote == null) { showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text('تنبيه'), content: const Text('لا يوجد كروب مسجل بهذا الرمز.'), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('رجوع'))])); return; }
+    if (remote == null) { showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text('تنبيه'), content: const Text('لا يوجد كروب مسجل بهذا الرمز.'), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('رجوع', style: TextStyle(color: Colors.amber)))])); return; }
     _showConfirmNameModal(remote);
   }
 
@@ -506,11 +505,11 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
       barrierDismissible: true,
       builder: (ctx) => AlertDialog(
         title: const Text('تأكيد اسم الكروب', textAlign: TextAlign.center),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [const Text('اكتب اسم الكروب للتأكيد والدخول:', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 14)), const SizedBox(height: 14), TextField(controller: nameConfirmCtrl, decoration: const InputDecoration(labelText: 'اسم الكروب', border: OutlineInputBorder()))]),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [const Text('اكتب اسم الكروب للتأكيد والدخول:', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 14)), const SizedBox(height: 14), TextField(controller: nameConfirmCtrl, decoration: SharedUI.inputDecor('اسم الكروب'))]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء', style: TextStyle(color: Colors.white54))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFB300), foregroundColor: Colors.black),
             onPressed: () async {
               if (nameConfirmCtrl.text.trim().toLowerCase() == group.name.trim().toLowerCase()) {
                 Navigator.pop(ctx);
@@ -519,7 +518,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
                 if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const GroupDashboardScreen()));
               } else { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الاسم غير مطابق!'))); }
             },
-            child: const Text('دخول'),
+            child: const Text('دخول', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -532,17 +531,18 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('بوابة الكروبات'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, 
-          // إزالة الـ const من TabBar لتجنب خطأ المترجم
-          bottom: TabBar(
-            labelColor: Colors.white, unselectedLabelColor: Colors.white54, indicatorColor: Colors.amber, 
-            tabs: const [Tab(icon: Icon(Icons.list), text: 'كروباتي'), Tab(icon: Icon(Icons.add_to_home_screen), text: 'إنشاء / دخول جديد')]
+          title: const Text('بوابة الكروبات'), 
+          bottom: const TabBar(
+            labelColor: Color(0xFFFFB300), unselectedLabelColor: Colors.white54, indicatorColor: Color(0xFFFFB300), 
+            tabs: [Tab(icon: Icon(Icons.list), text: 'كروباتي'), Tab(icon: Icon(Icons.add_to_home_screen), text: 'إنشاء / دخول جديد')]
           )
         ),
-        body: _isLoading ? const Center(child: CircularProgressIndicator()) : TabBarView(
+        body: _isLoading ? const Center(child: CircularProgressIndicator(color: Color(0xFFFFB300))) : TabBarView(
           children: [
-            myGroups.isEmpty ? const Center(child: Text('لم تنضم لأي كروب بعد.')) : ListView.builder(padding: const EdgeInsets.all(16), itemCount: myGroups.length, itemBuilder: (ctx, i) { return Card(elevation: 4, margin: const EdgeInsets.only(bottom: 12), child: ListTile(leading: CircleAvatar(backgroundColor: Colors.amber.shade100, child: const Icon(Icons.group, color: Color(0xFF8B1E22))), title: Text(myGroups[i]['name']!, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text('الرمز: ${myGroups[i]['code']}'), trailing: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white), onPressed: () => _handleQuickJoin(myGroups[i]['code']!), child: const Text('دخول')))); }),
-            SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(children: [Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [const Text('دخول كروب جديد', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))), TextField(controller: createNameCtrl, decoration: const InputDecoration(hintText: 'اسم الكروب')), TextField(controller: customCodeCtrl, decoration: const InputDecoration(hintText: 'الرمز السري')), TextField(controller: customPinCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'رمز المشرف (PIN)')), const SizedBox(height: 10), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white), onPressed: _handleCreate, child: const Text('إنشاء ودخول'))]))), const SizedBox(height: 20), Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [const Text('لديك كروب؟', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)), TextField(controller: enterCodeCtrl, decoration: const InputDecoration(hintText: 'الرمز السري للكروب')), const SizedBox(height: 10), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, foregroundColor: Colors.white), onPressed: () => _handleJoinWithCode(enterCodeCtrl.text.trim()), child: const Text('بحث ودخول'))])))]))
+            // التبويب الأول
+            myGroups.isEmpty ? const Center(child: Text('لم تنضم لأي كروب بعد.', style: TextStyle(color: Colors.white54))) : ListView.builder(padding: const EdgeInsets.all(16), itemCount: myGroups.length, itemBuilder: (ctx, i) { return Card(elevation: 4, margin: const EdgeInsets.only(bottom: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.white10)), child: ListTile(leading: CircleAvatar(backgroundColor: const Color(0xFFFFB300).withOpacity(0.2), child: const Icon(Icons.group, color: Color(0xFFFFB300))), title: Text(myGroups[i]['name']!, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), subtitle: Text('الرمز: ${myGroups[i]['code']}', style: const TextStyle(color: Colors.white54)), trailing: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFB300), foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), onPressed: () => _handleQuickJoin(myGroups[i]['code']!), child: const Text('دخول', style: TextStyle(fontWeight: FontWeight.bold))))); }),
+            // التبويب الثاني
+            SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(children: [Card(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Colors.white10)), child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [const Text('دخول كروب جديد', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)), const SizedBox(height: 12), TextField(controller: createNameCtrl, decoration: SharedUI.inputDecor('اسم الكروب')), const SizedBox(height: 10), TextField(controller: customCodeCtrl, decoration: SharedUI.inputDecor('الرمز السري')), const SizedBox(height: 10), TextField(controller: customPinCtrl, keyboardType: TextInputType.number, decoration: SharedUI.inputDecor('رمز المشرف (PIN)')), const SizedBox(height: 16), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF9325D), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: _handleCreate, child: const Text('إنشاء ودخول', style: TextStyle(fontWeight: FontWeight.bold)))]))), const SizedBox(height: 20), Card(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Colors.white10)), child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [const Text('لديك كروب؟', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)), const SizedBox(height: 12), TextField(controller: enterCodeCtrl, decoration: SharedUI.inputDecor('الرمز السري للكروب')), const SizedBox(height: 16), ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E3A8A), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: () => _handleJoinWithCode(enterCodeCtrl.text.trim()), child: const Text('بحث ودخول', style: TextStyle(fontWeight: FontWeight.bold)))])))]))
           ],
         ),
       ),
@@ -566,16 +566,16 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
   Widget build(BuildContext context) {
     var group = GroupManager.activeGroup;
     return Scaffold(
-      appBar: AppBar(title: Text(group?.name ?? ''), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, actions: [IconButton(icon: _isSyncing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.sync), onPressed: _sync)]),
+      appBar: AppBar(title: Text(group?.name ?? ''), actions: [IconButton(icon: _isSyncing ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.sync), onPressed: _sync)]),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, padding: const EdgeInsets.all(16)), icon: const Icon(Icons.play_circle_fill, color: Color(0xFFD4AF37)), label: const Text('لعبة جديدة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const SetupPlayersScreen(isGroupGame: true))).then((_) => setState(() {})); }), const SizedBox(height: 16),
-              ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, foregroundColor: Colors.white, padding: const EdgeInsets.all(16)), icon: const Icon(Icons.history, color: Colors.amber), label: Text('لعبات سابقة (${group?.matches.length ?? 0})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const PastMatchesScreen(isGroupGame: true))).then((_) => setState(() {})); }), const SizedBox(height: 16),
-              OutlinedButton.icon(style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16)), icon: const Icon(Icons.bar_chart, color: Color(0xFF8B1E22)), label: const Text('إحصائيات وألقاب', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))), onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const HeadToHeadScreen())).then((_) => setState(() {})); }),
+              SharedUI.buildGlowButton(title: 'لعبة جديدة', sub: 'ابدأ لعبة في هذا الكروب', icon: Icons.play_arrow, color: const Color(0xFFF9325D), onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const SetupPlayersScreen(isGroupGame: true))).then((_) => setState(() {})); }),
+              SharedUI.buildGlowButton(title: 'لعبات سابقة (${group?.matches.length ?? 0})', sub: 'سجل نتائج الكروب', icon: Icons.history, color: const Color(0xFF1E3A8A), onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const PastMatchesScreen(isGroupGame: true))).then((_) => setState(() {})); }),
+              SharedUI.buildGlowButton(title: 'إحصائيات وألقاب', sub: 'تحليل اللاعبين', icon: Icons.bar_chart, color: const Color(0xFFFFB300), onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const HeadToHeadScreen())).then((_) => setState(() {})); }),
             ],
           ),
         ),
@@ -585,7 +585,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 }
 
 // -------------------------------------------------------------
-// 3. تحديد اللاعبين 
+// 3. تحديد اللاعبين بالثيم العصري
 // -------------------------------------------------------------
 class SetupPlayersScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -598,16 +598,22 @@ class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('تحديد اللاعبين'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
+      appBar: AppBar(title: const Text('تحديد اللاعبين')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         children: [
-          TextField(controller: p1, decoration: const InputDecoration(labelText: 'الفريق الأول - لاعب 1', border: OutlineInputBorder())), const SizedBox(height: 8),
-          TextField(controller: p2, decoration: const InputDecoration(labelText: 'الفريق الأول - لاعب 2', border: OutlineInputBorder())), const SizedBox(height: 16),
-          TextField(controller: p3, decoration: const InputDecoration(labelText: 'الفريق الثاني - لاعب 1', border: OutlineInputBorder())), const SizedBox(height: 8),
-          TextField(controller: p4, decoration: const InputDecoration(labelText: 'الفريق الثاني - لاعب 2', border: OutlineInputBorder())), const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: const Color(0xFF161E2E), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.greenAccent.withOpacity(0.3))),
+            child: Column(children: [const Text('الفريق الأول', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 16)), const SizedBox(height: 12), TextField(controller: p1, decoration: SharedUI.inputDecor('لاعب 1')), const SizedBox(height: 10), TextField(controller: p2, decoration: SharedUI.inputDecor('لاعب 2'))]),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: const Color(0xFF161E2E), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.redAccent.withOpacity(0.3))),
+            child: Column(children: [const Text('الفريق الثاني', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16)), const SizedBox(height: 12), TextField(controller: p3, decoration: SharedUI.inputDecor('لاعب 1')), const SizedBox(height: 10), TextField(controller: p4, decoration: SharedUI.inputDecor('لاعب 2'))]),
+          ),
+          const SizedBox(height: 30),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, padding: const EdgeInsets.all(16)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFFFB300), foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
             onPressed: () {
               Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => MatchScreen(isGroupGame: widget.isGroupGame, names: [p1.text.trim().isEmpty?'لاعب 1':p1.text.trim(), p2.text.trim().isEmpty?'لاعب 2':p2.text.trim(), p3.text.trim().isEmpty?'لاعب 3':p3.text.trim(), p4.text.trim().isEmpty?'لاعب 4':p4.text.trim()])));
             },
@@ -620,7 +626,7 @@ class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
 }
 
 // -------------------------------------------------------------
-// 4. شاشة المباراة (ثيمات، الفائز الأقل نقاطاً، خط واحد)
+// 4. شاشة المباراة (ثيمات داخلية + الفائز الأقل نقاطاً + خط واحد)
 // -------------------------------------------------------------
 class MatchScreen extends StatefulWidget {
   final bool isGroupGame; final List<String>? names; final GameMatch? matchToResume;
@@ -811,24 +817,25 @@ class ConfettiPainter extends CustomPainter {
 }
 
 // -------------------------------------------------------------
-// سجل الألعاب والإحصائيات الأفقية الجديدة
+// سجل الألعاب السابقة (بالثيم العصري)
 // -------------------------------------------------------------
 class PastMatchesScreen extends StatefulWidget { final bool isGroupGame; const PastMatchesScreen({super.key, required this.isGroupGame}); @override State<PastMatchesScreen> createState() => _PastMatchesScreenState(); }
 class _PastMatchesScreenState extends State<PastMatchesScreen> {
   @override Widget build(BuildContext context) {
     var list = widget.isGroupGame ? (GroupManager.activeGroup?.matches ?? []) : soloMatchesList;
     return Scaffold(
-      appBar: AppBar(title: const Text('الألعاب السابقة'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
-      body: ListView.builder(
+      appBar: AppBar(title: const Text('الألعاب السابقة')),
+      body: list.isEmpty ? const Center(child: Text('لا توجد مباريات مسجلة بعد.', style: TextStyle(color: Colors.white54))) : ListView.builder(
+        padding: const EdgeInsets.all(12),
         itemCount: list.length,
         itemBuilder: (ctx, i) {
           return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            elevation: 2, margin: const EdgeInsets.only(bottom: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.white10)),
             child: ListTile(
-              title: Text('${list[i].t1p1} & ${list[i].t1p2} ضد ${list[i].t2p1} & ${list[i].t2p2}'), subtitle: Text('النتيجة: ${list[i].total1} - ${list[i].total2}'),
+              title: Text('${list[i].t1p1} & ${list[i].t1p2} ضد ${list[i].t2p1} & ${list[i].t2p2}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)), subtitle: Text('النتيجة: ${list[i].total1} - ${list[i].total2}', style: const TextStyle(color: Colors.white70)),
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                IconButton(icon: const Icon(Icons.visibility, color: Colors.blue), onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => MatchScreen(isGroupGame: widget.isGroupGame, matchToResume: list[i]))).then((_) => setState(() {})); }),
-                IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () { setState(() => list.removeAt(i)); if (widget.isGroupGame) GroupManager.updateActiveGroup(); }),
+                IconButton(icon: const Icon(Icons.visibility, color: Colors.blueAccent), onPressed: () { Navigator.push(context, MaterialPageRoute(builder: (_) => MatchScreen(isGroupGame: widget.isGroupGame, matchToResume: list[i]))).then((_) => setState(() {})); }),
+                IconButton(icon: const Icon(Icons.delete, color: Colors.redAccent), onPressed: () { setState(() => list.removeAt(i)); if (widget.isGroupGame) GroupManager.updateActiveGroup(); }),
               ]),
             ),
           );
@@ -838,7 +845,9 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
   }
 }
 
-// --- شاشة الإحصائيات الأفقية (Head To Head) ---
+// -------------------------------------------------------------
+// شاشة الإحصائيات (مواجهات عمودية مرتبة بناءً على طلبك)
+// -------------------------------------------------------------
 class HeadToHeadScreen extends StatefulWidget { const HeadToHeadScreen({super.key}); @override State<HeadToHeadScreen> createState() => _HeadToHeadScreenState(); }
 class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
   String? chosenPlayer;
@@ -872,8 +881,7 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
     final stats = (chosenPlayer != null) ? calculateStats(chosenPlayer!) : {};
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1522),
-      appBar: AppBar(title: const Text('إحصائيات المواجهات'), backgroundColor: const Color(0xFF161E2E), foregroundColor: Colors.white),
+      appBar: AppBar(title: const Text('المواجهات (Head to Head)')),
       body: players.isEmpty
           ? const Center(child: Text('لا توجد إحصائيات لمباريات منتهية.', style: TextStyle(color: Colors.white70)))
           : Column(
@@ -891,8 +899,10 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
                 ),
                 Expanded(
                   child: stats.isEmpty ? const Center(child: Text('لا توجد مواجهات مسجلة ضد خصوم.', style: TextStyle(color: Colors.white54))) : 
+                  // قائمة الإحصائيات (عمودية ومرتبة أفقياً بناءً على طلبك)
                   ListView.builder(
-                    scrollDirection: Axis.horizontal, padding: const EdgeInsets.all(16), itemCount: stats.length,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: stats.length,
                     itemBuilder: (ctx, i) {
                       String opp = stats.keys.elementAt(i);
                       int w = stats[opp]!['wins']!; int l = stats[opp]!['losses']!;
@@ -900,31 +910,27 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
                       Color resColor = w > l ? Colors.greenAccent : (l > w ? Colors.redAccent : Colors.orangeAccent);
 
                       return Container(
-                        width: 160, margin: const EdgeInsets.only(left: 16), padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(color: const Color(0xFF161E2E), borderRadius: BorderRadius.circular(16), border: Border.all(color: resColor.withOpacity(0.5), width: 2)),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(color: const Color(0xFF161E2E), borderRadius: BorderRadius.circular(12), border: Border.all(color: resColor.withOpacity(0.5))),
+                        child: Row(
                           children: [
-                            CircleAvatar(radius: 24, backgroundColor: resColor.withOpacity(0.2), child: Icon(Icons.person, color: resColor)),
-                            const SizedBox(height: 12),
-                            Text(opp, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            const Divider(color: Colors.white24, height: 20),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                Column(children: [const Text('فوز', style: TextStyle(color: Colors.greenAccent, fontSize: 12)), Text('$w', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18))]),
-                                Column(children: [const Text('خسارة', style: TextStyle(color: Colors.redAccent, fontSize: 12)), Text('$l', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18))]),
-                              ],
-                            ),
-                            const Spacer(),
-                            Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: resColor.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text(resultText, style: TextStyle(color: resColor, fontSize: 13, fontWeight: FontWeight.bold))),
+                            CircleAvatar(backgroundColor: resColor.withOpacity(0.2), child: Icon(Icons.person, color: resColor)),
+                            const SizedBox(width: 12),
+                            // اسم الخصم
+                            Expanded(child: Text(opp, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))),
+                            // النتائج الأفقية
+                            Column(children: [const Text('فوز', style: TextStyle(color: Colors.greenAccent, fontSize: 11)), Text('$w', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]),
+                            const SizedBox(width: 20),
+                            Column(children: [const Text('خسارة', style: TextStyle(color: Colors.redAccent, fontSize: 11)), Text('$l', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))]),
+                            const SizedBox(width: 20),
+                            // النتيجة الإجمالية
+                            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: resColor.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text(resultText, style: TextStyle(color: resColor, fontSize: 12, fontWeight: FontWeight.bold))),
                           ],
                         ),
                       );
                     },
                   ),
                 ),
-                const SizedBox(height: 40),
               ],
             ),
     );
