@@ -10,7 +10,7 @@ void main() {
 }
 
 // -------------------------------------------------------------
-// إعدادات التطبيق والحفظ الداخلي السريع (بدون مكتبات خارجية)
+// إعدادات التطبيق والحفظ الداخلي السريع (مؤقت بالذاكرة لتجنب أخطاء البناء)
 // -------------------------------------------------------------
 class AppSettings {
   static String myName = 'لاعب 1';
@@ -91,7 +91,7 @@ class GroupData {
 }
 
 // -------------------------------------------------------------
-// محرك السحابة وإدارة الكروبات
+// محرك السحابة
 // -------------------------------------------------------------
 class CloudStorage {
   static const String host = 'https://games-242da-default-rtdb.firebaseio.com';
@@ -178,7 +178,7 @@ class MyApp extends StatelessWidget {
 }
 
 // -------------------------------------------------------------
-// 1. الواجهة الرئيسية
+// 1. الواجهة الرئيسية (التصميم العصري)
 // -------------------------------------------------------------
 class MainHomeScreen extends StatefulWidget { const MainHomeScreen({super.key}); @override State<MainHomeScreen> createState() => _MainHomeScreenState(); }
 class _MainHomeScreenState extends State<MainHomeScreen> {
@@ -626,11 +626,19 @@ class _MatchScreenState extends State<MatchScreen> {
   bool showConfetti = false; String currentStatus = 'مؤجلة'; int currentWinner = 0; 
   Timer? _timer; int _seconds = 0; int currentThemeIndex = 0; 
 
-  final List<Map<String, dynamic>> appThemes = [
-    {'bgUrl': 'https://images.unsplash.com/photo-1518623489648-a173ef7824f3?q=80&w=800&auto=format&fit=crop', 'panelBg': Colors.white.withOpacity(0.9), 'text': Colors.black87, 'subText': Colors.black54, 't1Box': Colors.green.shade50, 't1Text': Colors.green.shade700, 'diffBox': Colors.blue.shade50, 'diffText': Colors.blue.shade700, 't2Box': Colors.red.shade50, 't2Text': Colors.red.shade700, 'rowBg1': Colors.white.withOpacity(0.9), 'rowBg2': Colors.grey.shade100.withOpacity(0.9), 'divider': Colors.grey.shade300},
-    {'bgUrl': 'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=800&auto=format&fit=crop', 'panelBg': const Color(0xFF0F172A).withOpacity(0.9), 'text': Colors.white, 'subText': Colors.grey.shade400, 't1Box': const Color(0xFF064E3B), 't1Text': Colors.greenAccent, 'diffBox': const Color(0xFF1E3A8A), 'diffText': Colors.lightBlueAccent, 't2Box': const Color(0xFF7F1D1D), 't2Text': Colors.redAccent, 'rowBg1': const Color(0xFF1E293B).withOpacity(0.9), 'rowBg2': const Color(0xFF0F172A).withOpacity(0.9), 'divider': Colors.white12},
-    {'bgUrl': 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop', 'panelBg': const Color(0xFF2A0800).withOpacity(0.9), 'text': const Color(0xFFFFE0B2), 'subText': const Color(0xFFD7CCC8), 't1Box': const Color(0xFF14532D), 't1Text': Colors.greenAccent, 'diffBox': const Color(0xFF1E3A8A), 'diffText': Colors.lightBlueAccent, 't2Box': const Color(0xFF450A0A), 't2Text': Colors.redAccent, 'rowBg1': const Color(0xFF3E1100).withOpacity(0.9), 'rowBg2': const Color(0xFF2A0800).withOpacity(0.9), 'divider': Colors.white12}
-  ];
+  String getThemeBgUrl() => ['https://images.unsplash.com/photo-1518623489648-a173ef7824f3?q=80&w=800&auto=format&fit=crop', 'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=800&auto=format&fit=crop', 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop'][currentThemeIndex];
+  Color getPanelBg() => [Colors.white.withOpacity(0.9), const Color(0xFF0F172A).withOpacity(0.9), const Color(0xFF2A0800).withOpacity(0.9)][currentThemeIndex];
+  Color getTextColor() => [Colors.black87, Colors.white, const Color(0xFFFFE0B2)][currentThemeIndex];
+  Color getSubTextColor() => [Colors.black54, Colors.grey.shade400, const Color(0xFFD7CCC8)][currentThemeIndex];
+  Color getT1Box() => [Colors.green.shade50, const Color(0xFF064E3B), const Color(0xFF14532D)][currentThemeIndex];
+  Color getT1Text() => [Colors.green.shade700, Colors.greenAccent, Colors.greenAccent][currentThemeIndex];
+  Color getDiffBox() => [Colors.blue.shade50, const Color(0xFF1E3A8A), const Color(0xFF1E3A8A)][currentThemeIndex];
+  Color getDiffText() => [Colors.blue.shade700, Colors.lightBlueAccent, Colors.lightBlueAccent][currentThemeIndex];
+  Color getT2Box() => [Colors.red.shade50, const Color(0xFF7F1D1D), const Color(0xFF450A0A)][currentThemeIndex];
+  Color getT2Text() => [Colors.red.shade700, Colors.redAccent, Colors.redAccent][currentThemeIndex];
+  Color getRowBg1() => [Colors.white.withOpacity(0.9), const Color(0xFF1E293B).withOpacity(0.9), const Color(0xFF3E1100).withOpacity(0.9)][currentThemeIndex];
+  Color getRowBg2() => [Colors.grey.shade100.withOpacity(0.9), const Color(0xFF0F172A).withOpacity(0.9), const Color(0xFF2A0800).withOpacity(0.9)][currentThemeIndex];
+  Color getDividerColor() => [Colors.grey.shade300, Colors.white12, Colors.white12][currentThemeIndex];
 
   @override void initState() {
     super.initState();
@@ -682,14 +690,14 @@ class _MatchScreenState extends State<MatchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    int diff = (tot1 - tot2).abs(); bool isFinished = currentStatus == 'منتهية'; var t = appThemes[currentThemeIndex];
+    int diff = (tot1 - tot2).abs(); bool isFinished = currentStatus == 'منتهية';
     bool t1Winning = tot1 < tot2; bool t2Winning = tot2 < tot1;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(title: Row(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.timer_outlined, size: 20), const SizedBox(width: 6), Text(formattedTime, style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5))]), centerTitle: true, backgroundColor: Colors.black.withOpacity(0.5), foregroundColor: Colors.white, elevation: 0, actions: [IconButton(icon: const Icon(Icons.palette), onPressed: () => setState(() => currentThemeIndex = (currentThemeIndex + 1) % 3), tooltip: 'تغيير الثيم')]),
       body: Container(
-        decoration: BoxDecoration(image: DecorationImage(image: NetworkImage(t['bgUrl']), fit: BoxFit.cover)),
+        decoration: BoxDecoration(image: DecorationImage(image: NetworkImage(getThemeBgUrl()), fit: BoxFit.cover)),
         child: SafeArea(
           child: Column(
             children: [
@@ -697,38 +705,38 @@ class _MatchScreenState extends State<MatchScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
                   children: [
-                    Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4), decoration: BoxDecoration(color: t['t2Box'], borderRadius: BorderRadius.circular(16)), child: Column(children: [Text('$tot2', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: t2Winning ? Colors.greenAccent : t['t2Text'], height: 1.1)), const SizedBox(height: 6), Text('$t2p1\n& $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: t['t2Text'], fontWeight: FontWeight.bold))]))), const SizedBox(width: 8),
-                    Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4), decoration: BoxDecoration(color: t['diffBox'], borderRadius: BorderRadius.circular(16)), child: Column(children: [Text('$diff', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: t['diffText'], height: 1.1)), const SizedBox(height: 6), Text('الفارق', style: TextStyle(fontSize: 12, color: t['diffText'], fontWeight: FontWeight.bold))]))), const SizedBox(width: 8),
-                    Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4), decoration: BoxDecoration(color: t['t1Box'], borderRadius: BorderRadius.circular(16)), child: Column(children: [Text('$tot1', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: t1Winning ? Colors.greenAccent : t['t1Text'], height: 1.1)), const SizedBox(height: 6), Text('$t1p1\n& $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: t['t1Text'], fontWeight: FontWeight.bold))]))),
+                    Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4), decoration: BoxDecoration(color: getT2Box(), borderRadius: BorderRadius.circular(16)), child: Column(children: [Text('$tot2', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: t2Winning ? Colors.greenAccent : getT2Text(), height: 1.1)), const SizedBox(height: 6), Text('$t2p1\n& $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: getT2Text(), fontWeight: FontWeight.bold))]))), const SizedBox(width: 8),
+                    Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4), decoration: BoxDecoration(color: getDiffBox(), borderRadius: BorderRadius.circular(16)), child: Column(children: [Text('$diff', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: getDiffText(), height: 1.1)), const SizedBox(height: 6), Text('الفارق', style: TextStyle(fontSize: 12, color: getDiffText(), fontWeight: FontWeight.bold))]))), const SizedBox(width: 8),
+                    Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4), decoration: BoxDecoration(color: getT1Box(), borderRadius: BorderRadius.circular(16)), child: Column(children: [Text('$tot1', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: t1Winning ? Colors.greenAccent : getT1Text(), height: 1.1)), const SizedBox(height: 6), Text('$t1p1\n& $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: getT1Text(), fontWeight: FontWeight.bold))]))),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), margin: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: t['panelBg'], borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)), border: Border(bottom: BorderSide(color: t['divider'], width: 1))),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), margin: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: getPanelBg(), borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)), border: Border(bottom: BorderSide(color: getDividerColor(), width: 1))),
                 child: Row(
                   children: [
-                    SizedBox(width: 40, child: Text('الجولة', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: t['subText'], fontWeight: FontWeight.bold))),
-                    Expanded(child: Text('$t2p1 & $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: t['subText'], fontWeight: FontWeight.bold))),
-                    Expanded(child: Text('الفارق', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: t['subText'], fontWeight: FontWeight.bold))),
-                    Expanded(child: Text('$t1p1 & $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: t['subText'], fontWeight: FontWeight.bold))),
+                    SizedBox(width: 40, child: Text('الجولة', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: getSubTextColor(), fontWeight: FontWeight.bold))),
+                    Expanded(child: Text('$t2p1 & $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: getSubTextColor(), fontWeight: FontWeight.bold))),
+                    Expanded(child: Text('الفارق', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: getSubTextColor(), fontWeight: FontWeight.bold))),
+                    Expanded(child: Text('$t1p1 & $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: getSubTextColor(), fontWeight: FontWeight.bold))),
                   ],
                 ),
               ),
               Expanded(
                 child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 12), color: t['panelBg'],
+                  margin: const EdgeInsets.symmetric(horizontal: 12), color: getPanelBg(),
                   child: ListView.builder(
                     padding: EdgeInsets.zero, itemCount: rounds.length,
                     itemBuilder: (ctx, i) {
                       int rDiff = (rounds[i].s1 - rounds[i].s2).abs();
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), decoration: BoxDecoration(color: i % 2 == 0 ? t['rowBg1'] : t['rowBg2']),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), decoration: BoxDecoration(color: i % 2 == 0 ? getRowBg1() : getRowBg2()),
                         child: Row(
                           children: [
-                            SizedBox(width: 40, child: Text('${i + 1}', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: t['subText'], fontSize: 13))),
-                            Expanded(child: Text('${rounds[i].s2}', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: t['text']))),
-                            Expanded(child: Text('$rDiff', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: t['subText']))),
-                            Expanded(child: Text('${rounds[i].s1}', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: t['text']))),
+                            SizedBox(width: 40, child: Text('${i + 1}', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: getSubTextColor(), fontSize: 13))),
+                            Expanded(child: Text('${rounds[i].s2}', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: getTextColor()))),
+                            Expanded(child: Text('$rDiff', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, color: getSubTextColor()))),
+                            Expanded(child: Text('${rounds[i].s1}', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: getTextColor()))),
                           ],
                         ),
                       );
@@ -738,31 +746,31 @@ class _MatchScreenState extends State<MatchScreen> {
               ),
               if (isFinished)
                 Container(
-                  margin: const EdgeInsets.only(left: 12, right: 12, bottom: 12), padding: const EdgeInsets.symmetric(vertical: 16), decoration: BoxDecoration(color: t['panelBg'], borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12))),
+                  margin: const EdgeInsets.only(left: 12, right: 12, bottom: 12), padding: const EdgeInsets.symmetric(vertical: 16), decoration: BoxDecoration(color: getPanelBg(), borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12))),
                   child: Row(
                     children: [
-                      Expanded(child: Column(children: [const Text('الخاسر 💔', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent)), const SizedBox(height: 4), Text(currentWinner == 1 ? '$t2p1 & $t2p2' : '$t1p1 & $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: t['text']))])),
-                      Container(width: 1, height: 40, color: t['divider']),
-                      Expanded(child: Column(children: [const Text('الفائز 🏆', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.greenAccent)), const SizedBox(height: 4), Text(currentWinner == 1 ? '$t1p1 & $t1p2' : '$t2p1 & $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: t['text']))])),
+                      Expanded(child: Column(children: [const Text('الخاسر 💔', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent)), const SizedBox(height: 4), Text(currentWinner == 1 ? '$t2p1 & $t2p2' : '$t1p1 & $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: getTextColor()))])),
+                      Container(width: 1, height: 40, color: getDividerColor()),
+                      Expanded(child: Column(children: [const Text('الفائز 🏆', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.greenAccent)), const SizedBox(height: 4), Text(currentWinner == 1 ? '$t1p1 & $t1p2' : '$t2p1 & $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: getTextColor()))])),
                     ],
                   ),
                 )
               else
                 Container(
-                  margin: const EdgeInsets.only(left: 12, right: 12, bottom: 12), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: t['panelBg'], borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12))),
+                  margin: const EdgeInsets.only(left: 12, right: 12, bottom: 12), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: getPanelBg(), borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12))),
                   child: Column(
                     children: [
                       Row(
                         children: [
-                          Expanded(child: TextField(controller: c2, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: TextStyle(color: t['text']), decoration: InputDecoration(filled: true, fillColor: t['rowBg2'], border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), hintText: '0', hintStyle: TextStyle(color: t['subText']), contentPadding: const EdgeInsets.symmetric(vertical: 10)), onChanged: (_) => setState(() {}))),
+                          Expanded(child: TextField(controller: c2, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: TextStyle(color: getTextColor()), decoration: InputDecoration(filled: true, fillColor: getRowBg2(), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), hintText: '0', hintStyle: TextStyle(color: getSubTextColor()), contentPadding: const EdgeInsets.symmetric(vertical: 10)), onChanged: (_) => setState(() {}))),
                           Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, shape: const CircleBorder(), padding: const EdgeInsets.all(14)), onPressed: () { HapticFeedback.lightImpact(); setState(() { rounds.add(GameRound(int.tryParse(c1.text) ?? 0, int.tryParse(c2.text) ?? 0)); c1.clear(); c2.clear(); }); }, child: const Icon(Icons.add))),
-                          Expanded(child: TextField(controller: c1, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: TextStyle(color: t['text']), decoration: InputDecoration(filled: true, fillColor: t['rowBg2'], border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), hintText: '0', hintStyle: TextStyle(color: t['subText']), contentPadding: const EdgeInsets.symmetric(vertical: 10)), onChanged: (_) => setState(() {}))),
+                          Expanded(child: TextField(controller: c1, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: TextStyle(color: getTextColor()), decoration: InputDecoration(filled: true, fillColor: getRowBg2(), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), hintText: '0', hintStyle: TextStyle(color: getSubTextColor()), contentPadding: const EdgeInsets.symmetric(vertical: 10)), onChanged: (_) => setState(() {}))),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Expanded(child: OutlinedButton(style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), side: BorderSide(color: t['subText'])), onPressed: () => saveState('مؤجلة', 0), child: Text('تأجيل', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: t['text'])))),
+                          Expanded(child: OutlinedButton(style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), side: BorderSide(color: getSubTextColor())), onPressed: () => saveState('مؤجلة', 0), child: Text('تأجيل', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: getTextColor())))),
                           const SizedBox(width: 12),
                           Expanded(child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: _finishMatchDialog, child: const Text('انتهى', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)))),
                         ],
@@ -796,7 +804,7 @@ class ConfettiPainter extends CustomPainter {
 }
 
 // -------------------------------------------------------------
-// سجل الألعاب والإحصائيات الأفقية
+// سجل الألعاب والإحصائيات الأفقية الجديدة
 // -------------------------------------------------------------
 class PastMatchesScreen extends StatefulWidget { final bool isGroupGame; const PastMatchesScreen({super.key, required this.isGroupGame}); @override State<PastMatchesScreen> createState() => _PastMatchesScreenState(); }
 class _PastMatchesScreenState extends State<PastMatchesScreen> {
@@ -823,7 +831,7 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
   }
 }
 
-// --- شاشة الإحصائيات (Head To Head) الأفقي ---
+// --- شاشة الإحصائيات الأفقية (Head To Head) ---
 class HeadToHeadScreen extends StatefulWidget { const HeadToHeadScreen({super.key}); @override State<HeadToHeadScreen> createState() => _HeadToHeadScreenState(); }
 class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
   String? chosenPlayer;
