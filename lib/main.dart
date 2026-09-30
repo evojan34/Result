@@ -109,7 +109,7 @@ class GroupData {
 }
 
 // -------------------------------------------------------------
-// محرك السحابة الكامل والمستقر
+// محرك السحابة
 // -------------------------------------------------------------
 class CloudStorage {
   static const String host = 'https://games-242da-default-rtdb.firebaseio.com';
@@ -252,6 +252,54 @@ class MainHomeScreen extends StatefulWidget {
 
 class _MainHomeScreenState extends State<MainHomeScreen> {
   final String bgImageUrl = 'https://images.pexels.com/photos/262333/pexels-photo-262333.jpeg';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkUpdateAlert();
+    });
+  }
+
+  void _checkUpdateAlert() async {
+    final updateInfo = await CloudStorage.checkForUpdates();
+    if (updateInfo != null && mounted) {
+      String latest = updateInfo['version'] ?? '1.0.0';
+      String note = updateInfo['notes'] ?? 'يوجد إصدار جديد من تطبيق Natija!';
+      String url = updateInfo['url'] ?? '';
+
+      if (latest != CloudStorage.currentVersion) {
+        showDialog(
+          context: context,
+          barrierDismissible: true,
+          builder: (ctx) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.system_update, color: Color(0xFF8B1E22)),
+                SizedBox(width: 8),
+                Text('تحديث جديد متاح'),
+              ],
+            ),
+            content: Text('الإصدار الحالي: ${CloudStorage.currentVersion}\nالإصدار الجديد: $latest\n\n$note'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('لاحقاً')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: url));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('تم نسخ رابط التحديث، الصقه في المتصفح للتحميل.')),
+                  );
+                  Navigator.pop(ctx);
+                },
+                child: const Text('نسخ رابط التحديث'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -497,7 +545,7 @@ class _MatchScreenState extends State<MatchScreen> {
   Timer? _timer;
   int _seconds = 0;
   
-  // نظام الثيمات (0 = كلاسيكي عنابي، 1 = ليلي داكن، 2 = ملكي)
+  // نظام الثيمات (0 = كلاسيكي، 1 = ليلي داكن، 2 = ملكي/خشبي)
   int currentThemeIndex = 0; 
 
   @override
@@ -548,11 +596,11 @@ class _MatchScreenState extends State<MatchScreen> {
   Future<void> saveState(String status) async {
     if (status == 'منتهية') _timer?.cancel(); 
     
-    // منطق لعبتكم: الأقل نقاطاً هو الفائز (1)، والأكثر نقاطاً هو الخاسر (2)
+    // منطق الكونكان: صاحب النقاط "الأقل" هو الفائز 
     int winId = 0;
     if (status == 'منتهية') {
-      if (tot1 < tot2) winId = 1; // الفريق الأول فائز (نقاط أقل)
-      else if (tot2 < tot1) winId = 2; // الفريق الثاني فائز (نقاط أقل)
+      if (tot1 < tot2) winId = 1; // الفريق 1 نقاطه أقل، هو الفائز
+      else if (tot2 < tot1) winId = 2; // الفريق 2 نقاطه أقل، هو الفائز
       else winId = 0; // تعادل
     }
 
@@ -581,13 +629,15 @@ class _MatchScreenState extends State<MatchScreen> {
     if (status == 'مؤجلة' && mounted) Navigator.pop(context);
   }
 
-  // --- لوحة ألوان الثيمات العصرية ---
+  // --- ألوان الثيمات المتعددة ---
   Color getBgColor() => [Colors.white, const Color(0xFF0F172A), const Color(0xFF2A0800)][currentThemeIndex];
   Color getCardBg() => [Colors.grey.shade50, const Color(0xFF1E293B), const Color(0xFF3E1100)][currentThemeIndex];
   Color getTextColor() => [Colors.black87, Colors.white, const Color(0xFFFFE0B2)][currentThemeIndex];
   Color getSubTextColor() => [Colors.black54, Colors.grey.shade400, const Color(0xFFD7CCC8)][currentThemeIndex];
   Color getHeaderBg() => [const Color(0xFF8B1E22), const Color(0xFF0F172A), const Color(0xFF1A0500)][currentThemeIndex];
   Color getDividerColor() => [Colors.grey.shade300, Colors.white10, Colors.white12][currentThemeIndex];
+  Color getWinColor() => [Colors.green.shade700, Colors.greenAccent, Colors.green.shade400][currentThemeIndex];
+  Color getLoseColor() => [Colors.red.shade700, Colors.redAccent, Colors.red.shade400][currentThemeIndex];
 
   void _cycleTheme() {
     setState(() {
@@ -599,6 +649,10 @@ class _MatchScreenState extends State<MatchScreen> {
   Widget build(BuildContext context) {
     int diff = (tot1 - tot2).abs();
     bool isFinished = currentStatus == 'منتهية';
+    
+    // من هو المتقدم حالياً؟ (صاحب النقاط الأقل)
+    bool t1Winning = tot1 < tot2;
+    bool t2Winning = tot2 < tot1;
 
     return Scaffold(
       backgroundColor: getBgColor(),
@@ -621,17 +675,17 @@ class _MatchScreenState extends State<MatchScreen> {
         children: [
           Column(
             children: [
-              // --- 1. رأس الصفحة: المجاميع والفارق (مطابق للصورة) ---
+              // --- 1. رأس الصفحة: المجاميع والفارق (مطابق للصورة تماماً) ---
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 decoration: BoxDecoration(color: getCardBg(), border: Border(bottom: BorderSide(color: getDividerColor()))),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // الفريق الأول (يسار أو يمين حسب الترتيب)
+                    // الفريق الأول
                     Column(
                       children: [
-                        Text('$tot1', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.green.shade700, height: 1.1)),
+                        Text('$tot1', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: t1Winning ? getWinColor() : getLoseColor(), height: 1.1)),
                         const SizedBox(height: 4),
                         Text('$t1p1\n& $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: getTextColor(), fontWeight: FontWeight.bold)),
                       ],
@@ -647,7 +701,7 @@ class _MatchScreenState extends State<MatchScreen> {
                     // الفريق الثاني
                     Column(
                       children: [
-                        Text('$tot2', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.red.shade700, height: 1.1)),
+                        Text('$tot2', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: t2Winning ? getWinColor() : getLoseColor(), height: 1.1)),
                         const SizedBox(height: 4),
                         Text('$t2p1\n& $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: getTextColor(), fontWeight: FontWeight.bold)),
                       ],
@@ -656,7 +710,22 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
               ),
 
-              // --- 2. قائمة الجولات (على خط واحد نظيف كالصور) ---
+              // --- 2. رأس الجدول الدقيق ---
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: getBgColor(),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: Text('$t1p1 & $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: getSubTextColor(), fontWeight: FontWeight.bold))),
+                    Expanded(child: Text('الفارق', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: getSubTextColor(), fontWeight: FontWeight.bold))),
+                    Expanded(child: Text('$t2p1 & $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: getSubTextColor(), fontWeight: FontWeight.bold))),
+                    SizedBox(width: 40, child: Text('الجولة', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: getSubTextColor(), fontWeight: FontWeight.bold))),
+                  ],
+                ),
+              ),
+
+              // --- 3. قائمة الجولات (على خط واحد نظيف) ---
               Expanded(
                 child: ListView.builder(
                   padding: EdgeInsets.zero,
@@ -682,14 +751,14 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
               ),
 
-              // --- 3. المنطقة السفلية: إما شريط الفائز والخاسر أو أزرار الإدخال ---
+              // --- 4. المنطقة السفلية ---
               if (isFinished)
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   decoration: BoxDecoration(color: getCardBg(), border: Border(top: BorderSide(color: getDividerColor()))),
                   child: Row(
                     children: [
-                      // الخاسر (الأكثر نقاطاً) على اليمين/اليسار بلون أحمر
+                      // الخاسر دائماً (صاحب النقاط الأعلى)
                       Expanded(
                         child: Column(
                           children: [
@@ -700,7 +769,7 @@ class _MatchScreenState extends State<MatchScreen> {
                         ),
                       ),
                       Container(width: 1, height: 40, color: getDividerColor()),
-                      // الفائز (الأقل نقاطاً) بلون أخضر
+                      // الفائز دائماً (صاحب النقاط الأقل)
                       Expanded(
                         child: Column(
                           children: [
@@ -761,7 +830,7 @@ class _MatchScreenState extends State<MatchScreen> {
                               style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                               onPressed: () {
                                 HapticFeedback.heavyImpact();
-                                saveState('منتهية'); // يحفظ ويحدد الفائز (الأقل نقاطاً) والخاسر (الأكثر نقاطاً)
+                                saveState('منتهية'); 
                               },
                               child: const Text('انتهى', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                             ),
@@ -842,10 +911,154 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
   }
 }
 
-class HeadToHeadScreen extends StatefulWidget { const HeadToHeadScreen({super.key}); @override State<HeadToHeadScreen> createState() => _HeadToHeadScreenState(); }
+class HeadToHeadScreen extends StatefulWidget {
+  const HeadToHeadScreen({super.key});
+  @override
+  State<HeadToHeadScreen> createState() => _HeadToHeadScreenState();
+}
+
 class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
-  @override Widget وردد(BuildContext context) { return Scaffold(appBar: AppBar(title: const Text('إحصائيات الكروب'))); } // Standard placeholder
-  @override Widget build(BuildContext context) {
-    return Scaffold(appBar: AppBar(title: const Text('إحصائيات الكروب'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white), body: const Center(child: Text('الإحصائيات مفعلة وتعمل تلقائياً.')));
+  String? chosenPlayer;
+
+  List<String> get finishedPlayers {
+    Set<String> set = {};
+    var matches = GroupManager.activeGroup?.matches ?? [];
+    for (var m in matches.where((x) => x.status == 'منتهية')) {
+      set.addAll([m.t1p1, m.t1p2, m.t2p1, m.t2p2]);
+    }
+    return set.toList();
+  }
+
+  Map<String, Map<String, int>> calculateStats(String player) {
+    Map<String, Map<String, int>> stats = {};
+    var matches = GroupManager.activeGroup?.matches ?? [];
+
+    for (var m in matches.where((x) => x.status == 'منتهية')) {
+      bool inT1 = (m.t1p1 == player || m.t1p2 == player);
+      bool inT2 = (m.t2p1 == player || m.t2p2 == player);
+      if (!inT1 && !inT2) continue;
+
+      bool won = inT1 ? (m.winner == 1) : (m.winner == 2);
+      List<String> opponents = inT1 ? [m.t2p1, m.t2p2] : [m.t1p1, m.t1p2];
+
+      for (var opp in opponents) {
+        stats.putIfAbsent(opp, () => {'wins': 0, 'losses': 0});
+        if (won) {
+          stats[opp]!['wins'] = stats[opp]!['wins']! + 1;
+        } else {
+          stats[opp]!['losses'] = stats[opp]!['losses']! + 1;
+        }
+      }
+    }
+    return stats;
+  }
+
+  void _resetStats() {
+    final TextEditingController pinCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تصفير الإحصائيات (رمز المشرف)', textAlign: TextAlign.center),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('أدخل رمز المشرف PIN لتأكيد تصفير الإحصائيات:'),
+            const SizedBox(height: 12),
+            TextField(controller: pinCtrl, keyboardType: TextInputType.number, obscureText: true, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'PIN')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              if (pinCtrl.text.trim() == (GroupManager.activeGroup?.adminPin ?? '1234')) {
+                setState(() {
+                  GroupManager.activeGroup?.matches.removeWhere((m) => m.status == 'منتهية');
+                  chosenPlayer = null;
+                });
+                await GroupManager.updateActiveGroup();
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تصفير الإحصائيات بنجاح')));
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('رمز المشرف غير صحيح!')));
+              }
+            },
+            child: const Text('تصفير'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final players = finishedPlayers;
+    if (chosenPlayer == null && players.isNotEmpty) chosenPlayer = players.first;
+    final stats = (chosenPlayer != null) ? calculateStats(chosenPlayer!) : {};
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('إحصائيات الكروب'),
+        backgroundColor: const Color(0xFF8B1E22),
+        foregroundColor: Colors.white,
+        actions: [
+          if (players.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_sweep, color: Colors.white),
+              tooltip: 'تصفير الإحصائيات',
+              onPressed: _resetStats,
+            ),
+        ],
+      ),
+      body: players.isEmpty
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Text('لا توجد إحصائيات حالياً.\nأنهِ مباراة واضغط "انتهى" لاحتساب النتائج.', textAlign: TextAlign.center),
+              ),
+            )
+          : Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(border: Border.all(color: const Color(0xFF8B1E22)), borderRadius: BorderRadius.circular(8)),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: chosenPlayer,
+                        items: players.map((p) => DropdownMenuItem(value: p, child: Text('اللاعب: $p', style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
+                        onChanged: (val) => setState(() => chosenPlayer = val),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Expanded(
+                    child: stats.isEmpty
+                        ? const Center(child: Text('لا توجد مواجهات مسجلة لهذا اللاعب.'))
+                        : ListView(
+                            children: stats.entries.map((e) {
+                              int w = e.value['wins'] ?? 0;
+                              int l = e.value['losses'] ?? 0;
+                              return Card(
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: w >= l ? Colors.green.shade100 : Colors.red.shade100,
+                                    child: Icon(w >= l ? Icons.emoji_events : Icons.close, color: w >= l ? Colors.green : Colors.red),
+                                  ),
+                                  title: Text('ضد اللاعب: ${e.key}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  trailing: Text('فوز: $w | خسارة: $l', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+    );
   }
 }
