@@ -10,7 +10,7 @@ void main() {
 }
 
 // -------------------------------------------------------------
-// نماذج البيانات (تم إزالة الهدف)
+// نماذج البيانات
 // -------------------------------------------------------------
 class GameRound {
   int s1, s2;
@@ -607,7 +607,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
 }
 
 // -------------------------------------------------------------
-// 3. داخل الكروب المشترك (بدون اللايف)
+// 3. داخل الكروب المشترك
 // -------------------------------------------------------------
 class GroupDashboardScreen extends StatefulWidget {
   const GroupDashboardScreen({super.key});
@@ -752,7 +752,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 }
 
 // -------------------------------------------------------------
-// 4. تحديد اللاعبين (بدون إعدادات سقف هدف)
+// 4. تحديد اللاعبين 
 // -------------------------------------------------------------
 class SetupPlayersScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -813,7 +813,7 @@ class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
 }
 
 // -------------------------------------------------------------
-// 5. شاشة المباراة (التصميم العصري الجديد والمضغوط)
+// 5. شاشة المباراة (التصميم العصري + الجولات المضغوطة)
 // -------------------------------------------------------------
 class MatchScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -883,7 +883,7 @@ class _MatchScreenState extends State<MatchScreen> {
   int get tot1 => rounds.fold(0, (a, b) => a + b.s1) + (int.tryParse(c1.text) ?? 0);
   int get tot2 => rounds.fold(0, (a, b) => a + b.s2) + (int.tryParse(c2.text) ?? 0);
 
-  // دالة الحفظ الذكية (بدون تعليق الشاشة)
+  // دالة الحفظ الذكية لتجنب تعليق الشاشة
   Future<void> saveState(String status, int win) async {
     if (status == 'منتهية') _timer?.cancel(); 
     
@@ -908,7 +908,7 @@ class _MatchScreenState extends State<MatchScreen> {
       if (idx != -1) soloMatchesList[idx] = m; else soloMatchesList.insert(0, m);
     }
     
-    // الخروج فقط في حالة التأجيل
+    // الخروج فقط عند ضغط تأجيل، أما الانتهاء فيبقى ليعرض الفائز
     if (status == 'مؤجلة' && mounted) {
        Navigator.pop(context);
     }
@@ -921,7 +921,7 @@ class _MatchScreenState extends State<MatchScreen> {
       context: context,
       barrierDismissible: true,
       builder: (ctx) => AlertDialog(
-        title: Text('تعديل نتيجة لعبة ${index + 1}', textAlign: TextAlign.center),
+        title: Text('تعديل النتيجة - رقم ${index + 1}', textAlign: TextAlign.center),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1007,7 +1007,7 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
               ),
 
-              // --- 2. قائمة الجولات المضغوطة (تتسع لـ 9 جولات وأكثر) ---
+              // --- 2. قائمة الجولات المضغوطة (تتسع لـ 9+ جولات) ---
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.only(top: 4, bottom: 8),
@@ -1030,14 +1030,14 @@ class _MatchScreenState extends State<MatchScreen> {
                           // نتيجة الفريق الثاني
                           Expanded(child: Center(child: Text('${rounds[i].s2}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)))),
                           
-                          // أيقونات التعديل (تصغر أو تختفي عند الانتهاء)
+                          // أيقونات التعديل
                           if (!isFinished) Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               InkWell(onTap: () => _editRound(i), child: Padding(padding: const EdgeInsets.all(4), child: Icon(Icons.edit, size: 18, color: Colors.blue.shade400))),
                               InkWell(onTap: () => setState(()=>rounds.removeAt(i)), child: Padding(padding: const EdgeInsets.all(4), child: Icon(Icons.delete, size: 18, color: Colors.red.shade400))),
                             ],
-                          ) else const SizedBox(width: 52), // موازنة المساحة
+                          ) else const SizedBox(width: 52),
                         ],
                       ),
                     );
@@ -1045,7 +1045,7 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
               ),
 
-              // --- 3. المنطقة السفلية (إما شريط الإدخال أو شريط الفائز/الخاسر) ---
+              // --- 3. المنطقة السفلية ---
               if (isFinished)
                 Column(
                   children: [
@@ -1137,7 +1137,7 @@ class _MatchScreenState extends State<MatchScreen> {
                                         onPressed: () {
                                           Navigator.pop(dCtx); // يغلق نافذة السؤال فقط
                                           setState(() => showConfetti = true); // يشغل الاحتفال
-                                          saveState('منتهية', 1); // يغير حالة الشاشة بذكاء بدون تعليق
+                                          saveState('منتهية', 1); // يغير حالة الشاشة وتظهر النتائج النهائية بوضوح
                                         },
                                         child: Text('$t1p1 و $t1p2'),
                                       ),
@@ -1234,11 +1234,12 @@ class ConfettiPainter extends CustomPainter {
 }
 
 // -------------------------------------------------------------
-// سجل الألعاب السابقة
+// سجل الألعاب السابقة (تم إصلاح الخطأ البرمجي هنا)
 // -------------------------------------------------------------
 class PastMatchesScreen extends StatefulWidget {
-  final bool isGroupGame;
-  const PastMatchesScreen({super.key});
+  final bool isGroupGame; // المتغير الذي كان مفقوداً
+  
+  const PastMatchesScreen({super.key, required this.isGroupGame}); // تم الإصلاح
 
   @override
   State<PastMatchesScreen> createState() => _PastMatchesScreenState();
@@ -1311,7 +1312,7 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
                                       if (widget.isGroupGame) {
                                         await GroupManager.updateActiveGroup();
                                       }
-                                      Navigator.pop(dCtx);
+                                      if (mounted) Navigator.pop(dCtx);
                                     },
                                     child: const Text('مسح'),
                                   )
@@ -1441,8 +1442,10 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
                   chosenPlayer = null;
                 });
                 await GroupManager.updateActiveGroup();
-                Navigator.pop(ctx);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تصفير الإحصائيات بنجاح')));
+                if (mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تصفير الإحصائيات بنجاح')));
+                }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('رمز المشرف غير صحيح!')));
               }
