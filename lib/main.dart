@@ -10,7 +10,7 @@ void main() {
 }
 
 // -------------------------------------------------------------
-// إعدادات التطبيق والحفظ الداخلي السريع (مؤقت بالذاكرة لتجنب أخطاء البناء)
+// إعدادات التطبيق والحفظ الداخلي (لتجنب المكتبات وأخطاء البناء)
 // -------------------------------------------------------------
 class AppSettings {
   static String myName = 'لاعب 1';
@@ -178,7 +178,7 @@ class MyApp extends StatelessWidget {
 }
 
 // -------------------------------------------------------------
-// 1. الواجهة الرئيسية (التصميم العصري)
+// 1. الواجهة الرئيسية
 // -------------------------------------------------------------
 class MainHomeScreen extends StatefulWidget { const MainHomeScreen({super.key}); @override State<MainHomeScreen> createState() => _MainHomeScreenState(); }
 class _MainHomeScreenState extends State<MainHomeScreen> {
@@ -326,10 +326,10 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.home, color: neonYellow), Text('الرئيسية', style: TextStyle(color: neonYellow, fontSize: 10))]),
-              Column(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.access_time, color: Colors.grey), Text('التاريخ', style: TextStyle(color: Colors.grey, fontSize: 10))]),
+              Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.access_time, color: Colors.grey), const Text('التاريخ', style: TextStyle(color: Colors.grey, fontSize: 10))]),
               const SizedBox(width: 40), 
-              Column(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.emoji_events_outlined, color: Colors.grey), Text('الإنجازات', style: TextStyle(color: Colors.grey, fontSize: 10))]),
-              Column(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.person_outline, color: Colors.grey), Text('حسابي', style: TextStyle(color: Colors.grey, fontSize: 10))]),
+              Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.emoji_events_outlined, color: Colors.grey), const Text('الإنجازات', style: TextStyle(color: Colors.grey, fontSize: 10))]),
+              Column(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.person_outline, color: Colors.grey), const Text('حسابي', style: TextStyle(color: Colors.grey, fontSize: 10))]),
             ],
           ),
         ),
@@ -453,12 +453,12 @@ class FriendsScreen extends StatelessWidget {
   const FriendsScreen({super.key});
   @override
   Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: const Color(0xFF0F1522), appBar: AppBar(title: const Text('أصدقائي (مواجهات فردية)'), backgroundColor: const Color(0xFF161E2E), foregroundColor: Colors.white), body: const Center(child: Text('هذه الشاشة مخصصة لمواجهات الألعاب المحلية.\nيمكنك مشاهدة التفاصيل الدقيقة داخل كروباتك السحابية.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70))));
+    return Scaffold(backgroundColor: const Color(0xFF0F1522), appBar: AppBar(title: const Text('أصدقائي (مواجهات فردية)'), backgroundColor: const Color(0xFF161E2E), foregroundColor: Colors.white), body: const Center(child: Text('هذه الشاشة مخصصة لمواجهات الألعاب المحلية.\nيمكنك مشاهدة التفاصيل الدقيقة للمواجهات داخل كروباتك السحابية.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70))));
   }
 }
 
 // -------------------------------------------------------------
-// 2. بوابة الكروبات (التبويبات)
+// 2. بوابة الكروبات (التبويبات، تم إزالة الـ const من TabBar)
 // -------------------------------------------------------------
 class GroupSelectScreen extends StatefulWidget { const GroupSelectScreen({super.key}); @override State<GroupSelectScreen> createState() => _GroupSelectScreenState(); }
 class _GroupSelectScreenState extends State<GroupSelectScreen> {
@@ -531,7 +531,14 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        appBar: AppBar(title: const Text('بوابة الكروبات'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, bottom: const TabBar(labelColor: Colors.white, unselectedLabelColor: Colors.white54, indicatorColor: Colors.amber, tabs: [Tab(icon: Icon(Icons.list), text: 'كروباتي'), Tab(icon: Icon(Icons.add_to_home_screen), text: 'إنشاء / دخول جديد')])),
+        appBar: AppBar(
+          title: const Text('بوابة الكروبات'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, 
+          // إزالة الـ const من TabBar لتجنب خطأ المترجم
+          bottom: TabBar(
+            labelColor: Colors.white, unselectedLabelColor: Colors.white54, indicatorColor: Colors.amber, 
+            tabs: const [Tab(icon: Icon(Icons.list), text: 'كروباتي'), Tab(icon: Icon(Icons.add_to_home_screen), text: 'إنشاء / دخول جديد')]
+          )
+        ),
         body: _isLoading ? const Center(child: CircularProgressIndicator()) : TabBarView(
           children: [
             myGroups.isEmpty ? const Center(child: Text('لم تنضم لأي كروب بعد.')) : ListView.builder(padding: const EdgeInsets.all(16), itemCount: myGroups.length, itemBuilder: (ctx, i) { return Card(elevation: 4, margin: const EdgeInsets.only(bottom: 12), child: ListTile(leading: CircleAvatar(backgroundColor: Colors.amber.shade100, child: const Icon(Icons.group, color: Color(0xFF8B1E22))), title: Text(myGroups[i]['name']!, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text('الرمز: ${myGroups[i]['code']}'), trailing: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white), onPressed: () => _handleQuickJoin(myGroups[i]['code']!), child: const Text('دخول')))); }),
@@ -838,13 +845,13 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
 
   List<String> get finishedPlayers {
     Set<String> set = {};
-    for (var m in GroupManager.activeGroup?.matches.where((x) => x.status == 'منتهية') ?? []) { set.addAll([m.t1p1, m.t1p2, m.t2p1, m.t2p2]); }
+    for (var m in (GroupManager.activeGroup?.matches ?? <GameMatch>[]).where((x) => x.status == 'منتهية')) { set.addAll([m.t1p1, m.t1p2, m.t2p1, m.t2p2]); }
     return set.toList();
   }
 
   Map<String, Map<String, int>> calculateStats(String player) {
     Map<String, Map<String, int>> stats = {};
-    for (var m in GroupManager.activeGroup?.matches.where((x) => x.status == 'منتهية') ?? []) {
+    for (var m in (GroupManager.activeGroup?.matches ?? <GameMatch>[]).where((x) => x.status == 'منتهية')) {
       bool inT1 = (m.t1p1 == player || m.t1p2 == player); bool inT2 = (m.t2p1 == player || m.t2p2 == player);
       if (!inT1 && !inT2) continue;
       bool won = (inT1 && m.winner == 1) || (inT2 && m.winner == 2);
