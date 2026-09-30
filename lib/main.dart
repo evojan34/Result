@@ -10,7 +10,7 @@ void main() {
 }
 
 // -------------------------------------------------------------
-// إعدادات التطبيق والحفظ الداخلي (بدون مكتبات خارجية لتجنب أخطاء البناء)
+// إعدادات التطبيق والحفظ الداخلي السريع (بدون مكتبات خارجية)
 // -------------------------------------------------------------
 class AppSettings {
   static String myName = 'لاعب 1';
@@ -18,16 +18,19 @@ class AppSettings {
 
 class LocalStorage {
   static final List<String> _saved = [];
+  
   static Future<void> saveGroupLocally(String name, String code) async {
     String entry = '$name|$code';
     if (!_saved.contains(entry)) _saved.add(entry);
   }
+  
   static Future<List<Map<String, String>>> getLocalGroups() async {
     return _saved.map((e) {
       var parts = e.split('|');
       return {'name': parts[0], 'code': parts.length > 1 ? parts[1] : ''};
     }).toList();
   }
+  
   static Future<void> removeGroupLocally(String code) async {
     _saved.removeWhere((e) => e.split('|')[1] == code);
   }
@@ -175,7 +178,7 @@ class MyApp extends StatelessWidget {
 }
 
 // -------------------------------------------------------------
-// 1. الواجهة الرئيسية (تفعيل جميع الأزرار العصرية)
+// 1. الواجهة الرئيسية
 // -------------------------------------------------------------
 class MainHomeScreen extends StatefulWidget { const MainHomeScreen({super.key}); @override State<MainHomeScreen> createState() => _MainHomeScreenState(); }
 class _MainHomeScreenState extends State<MainHomeScreen> {
@@ -289,7 +292,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               Row(
                 children: [
                   _buildSmallGridItem(Icons.bar_chart, 'إحصائياتي', 'تابع نتائجك', Colors.greenAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyStatsScreen()))),
-                  _buildSmallGridItem(Icons.people, 'أصدقائي', 'المواجهات المباشرة', Colors.purpleAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FriendsScreen()))),
+                  _buildSmallGridItem(Icons.people, 'أصدقائي', 'المواجهات', Colors.purpleAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FriendsScreen()))),
                   _buildSmallGridItem(Icons.stars, 'الإنجازات', 'افتح الجوائز', Colors.blue, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AchievementsScreen()))),
                   _buildSmallGridItem(Icons.settings, 'الإعدادات', 'خصص اسمك', Colors.grey, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) => setState((){}))),
                 ],
@@ -313,14 +316,37 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           ),
         ),
       ),
+      bottomNavigationBar: BottomAppBar(
+        color: cardDark,
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8,
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.home, color: neonYellow), Text('الرئيسية', style: TextStyle(color: neonYellow, fontSize: 10))]),
+              Column(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.access_time, color: Colors.grey), Text('التاريخ', style: TextStyle(color: Colors.grey, fontSize: 10))]),
+              const SizedBox(width: 40), 
+              Column(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.emoji_events_outlined, color: Colors.grey), Text('الإنجازات', style: TextStyle(color: Colors.grey, fontSize: 10))]),
+              Column(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.person_outline, color: Colors.grey), Text('حسابي', style: TextStyle(color: Colors.grey, fontSize: 10))]),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: neonYellow,
+        onPressed: () {},
+        child: const Icon(Icons.add, color: Colors.black, size: 30),
+      ),
     );
   }
 }
 
 // -------------------------------------------------------------
-// الشاشات الأربعة الجديدة (الإعدادات، الإحصائيات، الأصدقاء، الإنجازات)
+// الشاشات الأربعة الفرعية 
 // -------------------------------------------------------------
-
 class SettingsScreen extends StatefulWidget { const SettingsScreen({super.key}); @override State<SettingsScreen> createState() => _SettingsScreenState(); }
 class _SettingsScreenState extends State<SettingsScreen> {
   final _nameCtrl = TextEditingController(text: AppSettings.myName);
@@ -427,12 +453,12 @@ class FriendsScreen extends StatelessWidget {
   const FriendsScreen({super.key});
   @override
   Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: const Color(0xFF0F1522), appBar: AppBar(title: const Text('أصدقائي (مواجهات فردية)'), backgroundColor: const Color(0xFF161E2E), foregroundColor: Colors.white), body: const Center(child: Text('هذه الشاشة مخصصة لمواجهات الألعاب المحلية (بدون سحابة).\nيمكنك مشاهدة التفاصيل الدقيقة داخل كروباتك السحابية.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70))));
+    return Scaffold(backgroundColor: const Color(0xFF0F1522), appBar: AppBar(title: const Text('أصدقائي (مواجهات فردية)'), backgroundColor: const Color(0xFF161E2E), foregroundColor: Colors.white), body: const Center(child: Text('هذه الشاشة مخصصة لمواجهات الألعاب المحلية.\nيمكنك مشاهدة التفاصيل الدقيقة داخل كروباتك السحابية.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70))));
   }
 }
 
 // -------------------------------------------------------------
-// 2. بوابة الكروبات
+// 2. بوابة الكروبات (التبويبات)
 // -------------------------------------------------------------
 class GroupSelectScreen extends StatefulWidget { const GroupSelectScreen({super.key}); @override State<GroupSelectScreen> createState() => _GroupSelectScreenState(); }
 class _GroupSelectScreenState extends State<GroupSelectScreen> {
@@ -770,7 +796,7 @@ class ConfettiPainter extends CustomPainter {
 }
 
 // -------------------------------------------------------------
-// سجل الألعاب والإحصائيات الأفقية الجديدة
+// سجل الألعاب والإحصائيات الأفقية
 // -------------------------------------------------------------
 class PastMatchesScreen extends StatefulWidget { final bool isGroupGame; const PastMatchesScreen({super.key, required this.isGroupGame}); @override State<PastMatchesScreen> createState() => _PastMatchesScreenState(); }
 class _PastMatchesScreenState extends State<PastMatchesScreen> {
@@ -797,7 +823,7 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
   }
 }
 
-// --- شاشة الإحصائيات الأفقية (Head To Head) ---
+// --- شاشة الإحصائيات (Head To Head) الأفقي ---
 class HeadToHeadScreen extends StatefulWidget { const HeadToHeadScreen({super.key}); @override State<HeadToHeadScreen> createState() => _HeadToHeadScreenState(); }
 class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
   String? chosenPlayer;
@@ -850,11 +876,8 @@ class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
                 ),
                 Expanded(
                   child: stats.isEmpty ? const Center(child: Text('لا توجد مواجهات مسجلة ضد خصوم.', style: TextStyle(color: Colors.white54))) : 
-                  // --- قائمة الخصوم الأفقية ---
                   ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: stats.length,
+                    scrollDirection: Axis.horizontal, padding: const EdgeInsets.all(16), itemCount: stats.length,
                     itemBuilder: (ctx, i) {
                       String opp = stats.keys.elementAt(i);
                       int w = stats[opp]!['wins']!; int l = stats[opp]!['losses']!;
