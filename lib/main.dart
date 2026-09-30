@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
@@ -66,35 +65,27 @@ class GroupData {
 }
 
 // -------------------------------------------------------------
-// الحفظ المحلي للكروبات (كروباتي) باستخدام SharedPreferences
+// الحفظ الداخلي للكروبات (بسيط ولا يسبب أخطاء بناء)
 // -------------------------------------------------------------
 class LocalStorage {
-  static const String _key = 'my_saved_groups';
+  static final List<String> _saved = [];
 
   static Future<void> saveGroupLocally(String name, String code) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> saved = prefs.getStringList(_key) ?? [];
     String entry = '$name|$code';
-    if (!saved.contains(entry)) {
-      saved.add(entry);
-      await prefs.setStringList(_key, saved);
+    if (!_saved.contains(entry)) {
+      _saved.add(entry);
     }
   }
 
   static Future<List<Map<String, String>>> getLocalGroups() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> saved = prefs.getStringList(_key) ?? [];
-    return saved.map((e) {
+    return _saved.map((e) {
       var parts = e.split('|');
       return {'name': parts[0], 'code': parts.length > 1 ? parts[1] : ''};
     }).toList();
   }
 
   static Future<void> removeGroupLocally(String code) async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String> saved = prefs.getStringList(_key) ?? [];
-    saved.removeWhere((e) => e.split('|')[1] == code);
-    await prefs.setStringList(_key, saved);
+    _saved.removeWhere((e) => e.split('|')[1] == code);
   }
 }
 
@@ -161,7 +152,7 @@ class GroupManager {
     var newGroup = GroupData(code: cleanCode, name: cleanName, adminPin: cleanPin);
     activeGroup = newGroup;
     await CloudStorage.saveGroup(newGroup);
-    await LocalStorage.saveGroupLocally(cleanName, cleanCode); // حفظ محلي
+    await LocalStorage.saveGroupLocally(cleanName, cleanCode); 
     return true;
   }
 
@@ -172,7 +163,7 @@ class GroupManager {
   static Future<void> deleteActiveGroup() async {
     if (activeGroup != null) {
       await CloudStorage.deleteGroup(activeGroup!.code);
-      await LocalStorage.removeGroupLocally(activeGroup!.code); // مسح محلي
+      await LocalStorage.removeGroupLocally(activeGroup!.code); 
       activeGroup = null;
     }
   }
@@ -201,7 +192,6 @@ class MyApp extends StatelessWidget {
 // -------------------------------------------------------------
 class MainHomeScreen extends StatefulWidget { const MainHomeScreen({super.key}); @override State<MainHomeScreen> createState() => _MainHomeScreenState(); }
 class _MainHomeScreenState extends State<MainHomeScreen> {
-  // ألوان مخصصة للتصميم العصري
   final Color bgDark = const Color(0xFF0F1522);
   final Color cardDark = const Color(0xFF161E2E);
   final Color neonRed = const Color(0xFFF9325D);
@@ -272,7 +262,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
           child: Column(
             children: [
-              // Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -294,7 +283,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               ),
               const SizedBox(height: 30),
               
-              // Big Logo Area
               Stack(
                 alignment: Alignment.topCenter,
                 children: [
@@ -314,7 +302,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               ),
               const SizedBox(height: 30),
 
-              // Main Buttons
               _buildGlowButton(
                 title: 'لعبة جديدة', sub: 'إبدأ حساب نتيجتك الآن', icon: Icons.add, color: neonRed,
                 onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SetupPlayersScreen(isGroupGame: false))).then((_) => setState(() {})),
@@ -329,7 +316,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               ),
 
               const SizedBox(height: 10),
-              // Grid
               Row(
                 children: [
                   _buildSmallGridItem(Icons.bar_chart, 'إحصائياتي', 'تابع نتائجك', Colors.greenAccent),
@@ -340,7 +326,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
               ),
 
               const SizedBox(height: 20),
-              // Quote Box
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(color: cardDark, borderRadius: BorderRadius.circular(16), border: Border.all(color: neonYellow.withOpacity(0.3))),
@@ -358,7 +343,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           ),
         ),
       ),
-      // Bottom Nav Bar
       bottomNavigationBar: BottomAppBar(
         color: cardDark,
         shape: const CircularNotchedRectangle(),
@@ -369,10 +353,10 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.home, color: neonYellow), Text('الرئيسية', style: TextStyle(color: neonYellow, fontSize: 10))]),
-              Column(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.access_time, color: Colors.grey), Text('التاريخ', style: TextStyle(color: Colors.grey, fontSize: 10))]),
-              const SizedBox(width: 40), // Space for FAB
-              Column(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.emoji_events_outlined, color: Colors.grey), Text('الإنجازات', style: TextStyle(color: Colors.grey, fontSize: 10))]),
-              Column(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.person_outline, color: Colors.grey), Text('حسابي', style: TextStyle(color: Colors.grey, fontSize: 10))]),
+              Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.access_time, color: Colors.grey), Text('التاريخ', style: TextStyle(color: Colors.grey, fontSize: 10))]),
+              const SizedBox(width: 40), 
+              Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.emoji_events_outlined, color: Colors.grey), Text('الإنجازات', style: TextStyle(color: Colors.grey, fontSize: 10))]),
+              Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.person_outline, color: Colors.grey), Text('حسابي', style: TextStyle(color: Colors.grey, fontSize: 10))]),
             ],
           ),
         ),
@@ -429,7 +413,6 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
   }
 
   void _handleQuickJoin(String code) async {
-    // الدخول المباشر من "كروباتي" لا يحتاج تأكيد الاسم لأنه محفوظ مسبقاً
     setState(() => _isLoading = true);
     GroupData? remote = await CloudStorage.fetchGroup(code);
     setState(() => _isLoading = false);
@@ -466,7 +449,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
               if (nameConfirmCtrl.text.trim().toLowerCase() == group.name.trim().toLowerCase()) {
                 Navigator.pop(ctx);
                 GroupManager.activeGroup = group;
-                await LocalStorage.saveGroupLocally(group.name, group.code); // يحفظه للمرات القادمة
+                await LocalStorage.saveGroupLocally(group.name, group.code); 
                 if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const GroupDashboardScreen()));
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الاسم غير مطابق!')));
@@ -493,7 +476,6 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
         ),
         body: _isLoading ? const Center(child: CircularProgressIndicator()) : TabBarView(
           children: [
-            // التبويب 1: كروباتي المحفوظة محلياً
             myGroups.isEmpty 
               ? const Center(child: Text('لم تقم بالانضمام أو إنشاء أي كروب بعد.'))
               : ListView.builder(
@@ -516,8 +498,6 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
                     );
                   },
                 ),
-
-            // التبويب 2: دخول أو إنشاء كروب جديد
             SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -780,7 +760,6 @@ class _MatchScreenState extends State<MatchScreen> {
 
   void _finishMatchDialog() {
     HapticFeedback.heavyImpact();
-    // اقتراح الفائز: الأقل نقاطاً (قواعد الكونكان والدومنة)
     int suggestedWinner = 0;
     if (tot1 < tot2) suggestedWinner = 1;
     else if (tot2 < tot1) suggestedWinner = 2;
@@ -826,7 +805,6 @@ class _MatchScreenState extends State<MatchScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // البطاقات العلوية الملونة
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
@@ -840,7 +818,6 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
               ),
 
-              // رأس الجدول הדقيق
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), margin: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: t['panelBg'], borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)), border: Border(bottom: BorderSide(color: t['divider'], width: 1))),
                 child: Row(
@@ -853,7 +830,6 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
               ),
 
-              // قائمة الجولات
               Expanded(
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 12), color: t['panelBg'],
@@ -877,16 +853,13 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
               ),
 
-              // المنطقة السفلية (شريط الفائز/الخاسر أو الإدخال)
               if (isFinished)
                 Container(
                   margin: const EdgeInsets.only(left: 12, right: 12, bottom: 12), padding: const EdgeInsets.symmetric(vertical: 16), decoration: BoxDecoration(color: t['panelBg'], borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12))),
                   child: Row(
                     children: [
-                      // الخاسر
                       Expanded(child: Column(children: [const Text('الخاسر 💔', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent)), const SizedBox(height: 4), Text(currentWinner == 1 ? '$t2p1 & $t2p2' : '$t1p1 & $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: t['text']))])),
                       Container(width: 1, height: 40, color: t['divider']),
-                      // الفائز
                       Expanded(child: Column(children: [const Text('الفائز 🏆', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.greenAccent)), const SizedBox(height: 4), Text(currentWinner == 1 ? '$t1p1 & $t1p2' : '$t2p1 & $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: t['text']))])),
                     ],
                   ),
@@ -988,6 +961,6 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
 class HeadToHeadScreen extends StatefulWidget { const HeadToHeadScreen({super.key}); @override State<HeadToHeadScreen> createState() => _HeadToHeadScreenState(); }
 class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
   @override Widget build(BuildContext context) {
-    return Scaffold(appBar: AppBar(title: const Text('إحصائيات الكروب'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white), body: const Center(child: Text('الإحصائيات مفعلة وتعمل تلقائياً.')));
+    return Scaffold(appBar: AppBar(title: const Text('إحصائيات الكروب'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white), body: const Center(child: Text('سيتم تفعيل الإحصائيات الفردية قريباً.')));
   }
 }
