@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
@@ -17,8 +18,7 @@ class GameRound {
   GameRound(this.s1, this.s2);
 
   Map<String, dynamic> toJson() => {'s1': s1, 's2': s2};
-  factory GameRound.fromJson(Map<String, dynamic> j) =>
-      GameRound(j['s1'] ?? 0, j['s2'] ?? 0);
+  factory GameRound.fromJson(Map<String, dynamic> j) => GameRound(j['s1'] ?? 0, j['s2'] ?? 0);
 }
 
 class GameMatch {
@@ -26,85 +26,75 @@ class GameMatch {
   String t1p1, t1p2, t2p1, t2p2;
   List<GameRound> rounds;
   String current1, current2, status;
-  int winner;
-  int durationSeconds;
+  int winner, durationSeconds;
 
   GameMatch({
-    required this.id,
-    required this.t1p1,
-    required this.t1p2,
-    required this.t2p1,
-    required this.t2p2,
-    required this.rounds,
-    this.current1 = '',
-    this.current2 = '',
-    required this.status,
-    this.winner = 0,
-    this.durationSeconds = 0,
+    required this.id, required this.t1p1, required this.t1p2, required this.t2p1, required this.t2p2,
+    required this.rounds, this.current1 = '', this.current2 = '', required this.status, this.winner = 0, this.durationSeconds = 0,
   });
 
   int get total1 => rounds.fold(0, (a, b) => a + b.s1) + (int.tryParse(current1) ?? 0);
   int get total2 => rounds.fold(0, (a, b) => a + b.s2) + (int.tryParse(current2) ?? 0);
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        't1p1': t1p1,
-        't1p2': t1p2,
-        't2p1': t2p1,
-        't2p2': t2p2,
-        'rounds': rounds.map((r) => r.toJson()).toList(),
-        'current1': current1,
-        'current2': current2,
-        'status': status,
-        'winner': winner,
-        'durationSeconds': durationSeconds,
-      };
+    'id': id, 't1p1': t1p1, 't1p2': t1p2, 't2p1': t2p1, 't2p2': t2p2,
+    'rounds': rounds.map((r) => r.toJson()).toList(),
+    'current1': current1, 'current2': current2, 'status': status, 'winner': winner, 'durationSeconds': durationSeconds,
+  };
 
   factory GameMatch.fromJson(Map<String, dynamic> j) => GameMatch(
-        id: j['id'] ?? '',
-        t1p1: j['t1p1'] ?? '',
-        t1p2: j['t1p2'] ?? '',
-        t2p1: j['t2p1'] ?? '',
-        t2p2: j['t2p2'] ?? '',
-        rounds: (j['rounds'] as List? ?? [])
-            .map((r) => GameRound.fromJson(Map<String, dynamic>.from(r)))
-            .toList(),
-        current1: j['current1'] ?? '',
-        current2: j['current2'] ?? '',
-        status: j['status'] ?? 'مؤجلة',
-        winner: j['winner'] ?? 0,
-        durationSeconds: j['durationSeconds'] ?? 0,
-      );
+    id: j['id'] ?? '', t1p1: j['t1p1'] ?? '', t1p2: j['t1p2'] ?? '', t2p1: j['t2p1'] ?? '', t2p2: j['t2p2'] ?? '',
+    rounds: (j['rounds'] as List? ?? []).map((r) => GameRound.fromJson(Map<String, dynamic>.from(r))).toList(),
+    current1: j['current1'] ?? '', current2: j['current2'] ?? '', status: j['status'] ?? 'مؤجلة', winner: j['winner'] ?? 0, durationSeconds: j['durationSeconds'] ?? 0,
+  );
 }
 
 List<GameMatch> soloMatchesList = [];
 
 class GroupData {
-  String code;
-  String name;
-  String adminPin;
+  String code, name, adminPin;
   List<GameMatch> matches = [];
   GroupData({required this.code, required this.name, this.adminPin = '1234'});
 
-  Map<String, dynamic> toJson() => {
-        'code': code,
-        'name': name,
-        'adminPin': adminPin,
-        'matches': matches.map((m) => m.toJson()).toList(),
-      };
+  Map<String, dynamic> toJson() => {'code': code, 'name': name, 'adminPin': adminPin, 'matches': matches.map((m) => m.toJson()).toList()};
 
   factory GroupData.fromJson(Map<String, dynamic> j) {
-    var g = GroupData(
-      code: j['code'] ?? '',
-      name: j['name'] ?? 'كروب',
-      adminPin: j['adminPin'] ?? '1234',
-    );
-    if (j['matches'] != null) {
-      g.matches = (j['matches'] as List)
-          .map((m) => GameMatch.fromJson(Map<String, dynamic>.from(m)))
-          .toList();
-    }
+    var g = GroupData(code: j['code'] ?? '', name: j['name'] ?? 'كروب', adminPin: j['adminPin'] ?? '1234');
+    if (j['matches'] != null) g.matches = (j['matches'] as List).map((m) => GameMatch.fromJson(Map<String, dynamic>.from(m))).toList();
     return g;
+  }
+}
+
+// -------------------------------------------------------------
+// الحفظ المحلي للكروبات (كروباتي) باستخدام SharedPreferences
+// -------------------------------------------------------------
+class LocalStorage {
+  static const String _key = 'my_saved_groups';
+
+  static Future<void> saveGroupLocally(String name, String code) async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> saved = prefs.getStringList(_key) ?? [];
+    String entry = '$name|$code';
+    if (!saved.contains(entry)) {
+      saved.add(entry);
+      await prefs.setStringList(_key, saved);
+    }
+  }
+
+  static Future<List<Map<String, String>>> getLocalGroups() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> saved = prefs.getStringList(_key) ?? [];
+    return saved.map((e) {
+      var parts = e.split('|');
+      return {'name': parts[0], 'code': parts.length > 1 ? parts[1] : ''};
+    }).toList();
+  }
+
+  static Future<void> removeGroupLocally(String code) async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String> saved = prefs.getStringList(_key) ?? [];
+    saved.removeWhere((e) => e.split('|')[1] == code);
+    await prefs.setStringList(_key, saved);
   }
 }
 
@@ -114,15 +104,12 @@ class GroupData {
 class CloudStorage {
   static const String host = 'https://games-242da-default-rtdb.firebaseio.com';
 
-  static String _formatKey(String code) {
-    return base64Url.encode(utf8.encode(code.trim().toLowerCase())).replaceAll('=', '');
-  }
+  static String _formatKey(String code) => base64Url.encode(utf8.encode(code.trim().toLowerCase())).replaceAll('=', '');
 
   static Future<bool> saveGroup(GroupData group) async {
     try {
       final key = _formatKey(group.code);
-      final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 8);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
       final req = await client.putUrl(Uri.parse('$host/groups/$key.json'));
       req.headers.contentType = ContentType.json;
       req.write(jsonEncode(group.toJson()));
@@ -130,19 +117,15 @@ class CloudStorage {
       await res.drain();
       client.close();
       return res.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
+    } catch (_) { return false; }
   }
 
   static Future<GroupData?> fetchGroup(String code) async {
     try {
       final key = _formatKey(code);
-      final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 8);
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
       final req = await client.getUrl(Uri.parse('$host/groups/$key.json'));
       final res = await req.close();
-
       if (res.statusCode == 200) {
         final body = await res.transform(utf8.decoder).join();
         if (body != 'null' && body.trim().isNotEmpty) {
@@ -163,8 +146,7 @@ class CloudStorage {
       final key = _formatKey(code);
       final client = HttpClient();
       final req = await client.deleteUrl(Uri.parse('$host/groups/$key.json'));
-      final res = await req.close();
-      await res.drain();
+      await req.close();
       client.close();
     } catch (_) {}
   }
@@ -174,26 +156,23 @@ class GroupManager {
   static GroupData? activeGroup;
 
   static Future<bool> createGroup(String name, String code, String pin) async {
-    String cleanName = name.trim();
-    String cleanCode = code.trim();
-    String cleanPin = pin.trim().isEmpty ? '1234' : pin.trim();
+    String cleanName = name.trim(), cleanCode = code.trim(), cleanPin = pin.trim().isEmpty ? '1234' : pin.trim();
     if (cleanName.isEmpty || cleanCode.isEmpty) return false;
-
     var newGroup = GroupData(code: cleanCode, name: cleanName, adminPin: cleanPin);
     activeGroup = newGroup;
     await CloudStorage.saveGroup(newGroup);
+    await LocalStorage.saveGroupLocally(cleanName, cleanCode); // حفظ محلي
     return true;
   }
 
   static Future<void> updateActiveGroup() async {
-    if (activeGroup != null) {
-      await CloudStorage.saveGroup(activeGroup!);
-    }
+    if (activeGroup != null) await CloudStorage.saveGroup(activeGroup!);
   }
 
   static Future<void> deleteActiveGroup() async {
     if (activeGroup != null) {
       await CloudStorage.deleteGroup(activeGroup!.code);
+      await LocalStorage.removeGroupLocally(activeGroup!.code); // مسح محلي
       activeGroup = null;
     }
   }
@@ -210,95 +189,223 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Natija',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF8B1E22)),
-        useMaterial3: true,
-      ),
+      theme: ThemeData(fontFamily: 'Cairo', useMaterial3: true),
+      builder: (context, child) => Directionality(textDirection: TextDirection.rtl, child: child!),
       home: const MainHomeScreen(),
-      builder: (context, child) {
-        return Directionality(textDirection: TextDirection.rtl, child: child!);
-      },
     );
   }
 }
 
-class MainHomeScreen extends StatefulWidget {
-  const MainHomeScreen({super.key});
-  @override
-  State<MainHomeScreen> createState() => _MainHomeScreenState();
-}
-
+// -------------------------------------------------------------
+// 1. الواجهة الرئيسية (التصميم العصري المطابق للصورة)
+// -------------------------------------------------------------
+class MainHomeScreen extends StatefulWidget { const MainHomeScreen({super.key}); @override State<MainHomeScreen> createState() => _MainHomeScreenState(); }
 class _MainHomeScreenState extends State<MainHomeScreen> {
-  final String bgImageUrl = 'https://images.pexels.com/photos/262333/pexels-photo-262333.jpeg';
+  // ألوان مخصصة للتصميم العصري
+  final Color bgDark = const Color(0xFF0F1522);
+  final Color cardDark = const Color(0xFF161E2E);
+  final Color neonRed = const Color(0xFFF9325D);
+  final Color neonBlue = const Color(0xFF1E3A8A);
+  final Color neonYellow = const Color(0xFFFFB300);
+
+  Widget _buildGlowButton({required String title, required String sub, required IconData icon, required Color color, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.5), width: 1.5),
+          boxShadow: [BoxShadow(color: color.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 4))],
+        ),
+        child: Row(
+          children: [
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: color, blurRadius: 10)]), child: Icon(icon, color: color, size: 24)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 2),
+                  Text(sub, style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, color: Colors.white.withOpacity(0.8), size: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmallGridItem(IconData icon, String title, String sub, Color color) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(color: cardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white10)),
+        child: Column(
+          children: [
+            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle), child: Icon(icon, color: color, size: 28)),
+            const SizedBox(height: 10),
+            Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+            Text(sub, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Natija', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.white, letterSpacing: 1.2)),
-        centerTitle: true,
-        backgroundColor: Colors.black.withOpacity(0.4),
-        elevation: 0,
-      ),
-      body: Container(
-        width: double.infinity, height: double.infinity,
-        decoration: BoxDecoration(image: DecorationImage(image: NetworkImage(bgImageUrl), fit: BoxFit.cover)),
-        child: Container(
-          color: Colors.black.withOpacity(0.65),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+      backgroundColor: bgDark,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          child: Column(
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-                    icon: const Icon(Icons.add_circle, color: Color(0xFFD4AF37)),
-                    label: const Text('لعبة جديدة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const SetupPlayersScreen(isGroupGame: false))).then((_) => setState(() {}));
-                    },
+                  Row(
+                    children: [
+                      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: neonYellow.withOpacity(0.2), shape: BoxShape.circle), child: Icon(Icons.military_tech, color: neonYellow, size: 24)),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Natija', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text('احسب نتيجتك بكل سهولة', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11)),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 18),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Colors.white24))),
-                    icon: const Icon(Icons.history, color: Colors.amber),
-                    label: Text('الألعاب السابقة (${soloMatchesList.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const PastMatchesScreen(isGroupGame: false))).then((_) => setState(() {}));
-                    },
-                  ),
-                  const SizedBox(height: 18),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black87, padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)), elevation: 8),
-                    icon: const Icon(Icons.cloud_sync, size: 28, color: Colors.black87),
-                    label: const Text('لعبة الكروب (سحابي)', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    onPressed: () {
-                      HapticFeedback.mediumImpact();
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => const GroupSelectScreen())).then((_) => setState(() {}));
-                    },
-                  ),
+                  IconButton(icon: const Icon(Icons.settings, color: Colors.white54), onPressed: () {}),
                 ],
               ),
-            ),
+              const SizedBox(height: 30),
+              
+              // Big Logo Area
+              Stack(
+                alignment: Alignment.topCenter,
+                children: [
+                  Icon(Icons.sports_esports, size: 100, color: Colors.blueAccent.shade400, shadows: [Shadow(color: Colors.blueAccent.withOpacity(0.8), blurRadius: 40)]),
+                  Positioned(top: -10, child: Icon(Icons.military_tech, size: 40, color: neonYellow, shadows: [Shadow(color: neonYellow, blurRadius: 20)])),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const Text('Natija', style: TextStyle(color: Colors.white, fontSize: 38, fontWeight: FontWeight.bold, letterSpacing: 2)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(width: 30, height: 2, color: neonYellow),
+                  const Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Text('أداة حساب نتيجة الألعاب', style: TextStyle(color: Colors.white70, fontSize: 14))),
+                  Container(width: 30, height: 2, color: neonYellow),
+                ],
+              ),
+              const SizedBox(height: 30),
+
+              // Main Buttons
+              _buildGlowButton(
+                title: 'لعبة جديدة', sub: 'إبدأ حساب نتيجتك الآن', icon: Icons.add, color: neonRed,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SetupPlayersScreen(isGroupGame: false))).then((_) => setState(() {})),
+              ),
+              _buildGlowButton(
+                title: 'الألعاب السابقة (${soloMatchesList.length})', sub: 'شاهد نتائجك السابقة', icon: Icons.history, color: Colors.blueAccent,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PastMatchesScreen(isGroupGame: false))).then((_) => setState(() {})),
+              ),
+              _buildGlowButton(
+                title: 'لعبة الكروب (سحابي)', sub: 'انضم إلى لعبة جماعية', icon: Icons.casino, color: neonYellow,
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const GroupSelectScreen())).then((_) => setState(() {})),
+              ),
+
+              const SizedBox(height: 10),
+              // Grid
+              Row(
+                children: [
+                  _buildSmallGridItem(Icons.bar_chart, 'إحصائياتي', 'تابع نتائجك', Colors.greenAccent),
+                  _buildSmallGridItem(Icons.people, 'أصدقائي', 'قارن مع الأصدقاء', Colors.purpleAccent),
+                  _buildSmallGridItem(Icons.stars, 'الإنجازات', 'افتح الجوائز', Colors.blue),
+                  _buildSmallGridItem(Icons.settings_applications, 'الإعدادات', 'خصص تجربتك', Colors.grey),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+              // Quote Box
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(color: cardDark, borderRadius: BorderRadius.circular(16), border: Border.all(color: neonYellow.withOpacity(0.3))),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.military_tech, color: neonYellow),
+                    const SizedBox(width: 10),
+                    const Text('“ كل نتيجة تقربك من أفضل نسخة منك ”', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
+            ],
           ),
         ),
+      ),
+      // Bottom Nav Bar
+      bottomNavigationBar: BottomAppBar(
+        color: cardDark,
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8,
+        child: SizedBox(
+          height: 60,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.home, color: neonYellow), Text('الرئيسية', style: TextStyle(color: neonYellow, fontSize: 10))]),
+              Column(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.access_time, color: Colors.grey), Text('التاريخ', style: TextStyle(color: Colors.grey, fontSize: 10))]),
+              const SizedBox(width: 40), // Space for FAB
+              Column(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.emoji_events_outlined, color: Colors.grey), Text('الإنجازات', style: TextStyle(color: Colors.grey, fontSize: 10))]),
+              Column(mainAxisSize: MainAxisSize.min, children: const [Icon(Icons.person_outline, color: Colors.grey), Text('حسابي', style: TextStyle(color: Colors.grey, fontSize: 10))]),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: neonYellow,
+        onPressed: () {},
+        child: const Icon(Icons.add, color: Colors.black, size: 30),
       ),
     );
   }
 }
 
 // -------------------------------------------------------------
-// بوابة الكروبات (تم إرجاع ميزة تأكيد اسم الكروب)
+// 2. بوابة الكروبات (تبويبات: كروباتي / دخول وإنشاء)
 // -------------------------------------------------------------
 class GroupSelectScreen extends StatefulWidget { const GroupSelectScreen({super.key}); @override State<GroupSelectScreen> createState() => _GroupSelectScreenState(); }
 class _GroupSelectScreenState extends State<GroupSelectScreen> {
   final createNameCtrl = TextEditingController(), customCodeCtrl = TextEditingController(), customPinCtrl = TextEditingController(), enterCodeCtrl = TextEditingController();
   bool _isLoading = false;
+  List<Map<String, String>> myGroups = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMyGroups();
+  }
+
+  void _loadMyGroups() async {
+    var groups = await LocalStorage.getLocalGroups();
+    setState(() => myGroups = groups);
+  }
 
   void _handleCreate() async {
     if (createNameCtrl.text.trim().isEmpty || customCodeCtrl.text.trim().isEmpty) return;
@@ -308,26 +415,32 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const GroupDashboardScreen()));
   }
 
-  void _handleJoin() async {
-    if (enterCodeCtrl.text.trim().isEmpty) return;
+  void _handleJoinWithCode(String code) async {
+    if (code.isEmpty) return;
     setState(() => _isLoading = true);
-    GroupData? remote = await CloudStorage.fetchGroup(enterCodeCtrl.text.trim());
+    GroupData? remote = await CloudStorage.fetchGroup(code);
     setState(() => _isLoading = false);
 
     if (remote == null) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('تنبيه'),
-          content: const Text('لا يوجد كروب مسجل بهذا الرمز السري.'),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('رجوع'))],
-        ),
-      );
+      showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text('تنبيه'), content: const Text('لا يوجد كروب مسجل بهذا الرمز.'), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('رجوع'))]));
       return;
     }
-
-    // إرجاع ميزة المطابقة الأمنية لاسم الكروب
     _showConfirmNameModal(remote);
+  }
+
+  void _handleQuickJoin(String code) async {
+    // الدخول المباشر من "كروباتي" لا يحتاج تأكيد الاسم لأنه محفوظ مسبقاً
+    setState(() => _isLoading = true);
+    GroupData? remote = await CloudStorage.fetchGroup(code);
+    setState(() => _isLoading = false);
+    if (remote != null) {
+      GroupManager.activeGroup = remote;
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const GroupDashboardScreen()));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الكروب غير موجود أو تم حذفه!')));
+      LocalStorage.removeGroupLocally(code);
+      _loadMyGroups();
+    }
   }
 
   void _showConfirmNameModal(GroupData group) {
@@ -340,7 +453,7 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('تم العثور على الكروب!\nاكتب اسم الكروب للتأكيد والدخول:', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 14)),
+            const Text('اكتب اسم الكروب للتأكيد والدخول:', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 14)),
             const SizedBox(height: 14),
             TextField(controller: nameConfirmCtrl, decoration: const InputDecoration(labelText: 'اسم الكروب', border: OutlineInputBorder())),
           ],
@@ -349,13 +462,14 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
-            onPressed: () {
+            onPressed: () async {
               if (nameConfirmCtrl.text.trim().toLowerCase() == group.name.trim().toLowerCase()) {
                 Navigator.pop(ctx);
                 GroupManager.activeGroup = group;
-                Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const GroupDashboardScreen()));
+                await LocalStorage.saveGroupLocally(group.name, group.code); // يحفظه للمرات القادمة
+                if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const GroupDashboardScreen()));
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اسم الكروب غير مطابق للرمز السري!')));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الاسم غير مطابق!')));
               }
             },
             child: const Text('دخول'),
@@ -367,27 +481,65 @@ class _GroupSelectScreenState extends State<GroupSelectScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('بوابة الكروبات'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
-      body: _isLoading ? const Center(child: CircularProgressIndicator()) : SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('بوابة الكروبات'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white,
+          bottom: const TabBar(
+            labelColor: Colors.white, unselectedLabelColor: Colors.white54, indicatorColor: Colors.amber,
+            tabs: [Tab(icon: Icon(Icons.list), text: 'كروباتي'), Tab(icon: Icon(Icons.add_to_home_screen), text: 'إنشاء / دخول جديد')],
+          ),
+        ),
+        body: _isLoading ? const Center(child: CircularProgressIndicator()) : TabBarView(
           children: [
-            Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const Text('دخول كروب جديد', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))),
-              TextField(controller: createNameCtrl, decoration: const InputDecoration(hintText: 'اسم الكروب')),
-              TextField(controller: customCodeCtrl, decoration: const InputDecoration(hintText: 'الرمز السري')),
-              TextField(controller: customPinCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'رمز المشرف (PIN)')),
-              const SizedBox(height: 10),
-              ElevatedButton(onPressed: _handleCreate, child: const Text('إنشاء ودخول')),
-            ]))),
-            const SizedBox(height: 20),
-            Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              const Text('لديك كروب؟', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-              TextField(controller: enterCodeCtrl, decoration: const InputDecoration(hintText: 'الرمز السري للكروب')),
-              const SizedBox(height: 10),
-              ElevatedButton(onPressed: _handleJoin, child: const Text('دخول')),
-            ]))),
+            // التبويب 1: كروباتي المحفوظة محلياً
+            myGroups.isEmpty 
+              ? const Center(child: Text('لم تقم بالانضمام أو إنشاء أي كروب بعد.'))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: myGroups.length,
+                  itemBuilder: (ctx, i) {
+                    return Card(
+                      elevation: 4,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: ListTile(
+                        leading: CircleAvatar(backgroundColor: Colors.amber.shade100, child: const Icon(Icons.group, color: Color(0xFF8B1E22))),
+                        title: Text(myGroups[i]['name']!, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('الرمز: ${myGroups[i]['code']}'),
+                        trailing: ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white),
+                          onPressed: () => _handleQuickJoin(myGroups[i]['code']!),
+                          child: const Text('دخول'),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+
+            // التبويب 2: دخول أو إنشاء كروب جديد
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    const Text('دخول كروب جديد', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF8B1E22))),
+                    TextField(controller: createNameCtrl, decoration: const InputDecoration(hintText: 'اسم الكروب')),
+                    TextField(controller: customCodeCtrl, decoration: const InputDecoration(hintText: 'الرمز السري')),
+                    TextField(controller: customPinCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'رمز المشرف (PIN)')),
+                    const SizedBox(height: 10),
+                    ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white), onPressed: _handleCreate, child: const Text('إنشاء ودخول')),
+                  ]))),
+                  const SizedBox(height: 20),
+                  Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    const Text('لديك كروب؟', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                    TextField(controller: enterCodeCtrl, decoration: const InputDecoration(hintText: 'الرمز السري للكروب')),
+                    const SizedBox(height: 10),
+                    ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.black87, foregroundColor: Colors.white), onPressed: () => _handleJoinWithCode(enterCodeCtrl.text.trim()), child: const Text('بحث ودخول')),
+                  ]))),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -458,7 +610,7 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
 }
 
 // -------------------------------------------------------------
-// تحديد اللاعبين
+// 3. تحديد اللاعبين 
 // -------------------------------------------------------------
 class SetupPlayersScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -497,7 +649,7 @@ class _SetupPlayersScreenState extends State<SetupPlayersScreen> {
 }
 
 // -------------------------------------------------------------
-// شاشة المباراة: تصميم الصور الدقيق + الثيمات + الفائز اليدوي/الأقل نقاط
+// 4. شاشة المباراة (ثيمات، الفائز الأقل نقاطاً، خط واحد)
 // -------------------------------------------------------------
 class MatchScreen extends StatefulWidget {
   final bool isGroupGame;
@@ -522,13 +674,11 @@ class _MatchScreenState extends State<MatchScreen> {
   Timer? _timer;
   int _seconds = 0;
   
-  // الثيمات: 0=النهاري الفاتح، 1=الليلي الداكن، 2=الخلفية الحمراء/الخشبية
   int currentThemeIndex = 0; 
 
-  // إعدادات الثيمات (مطابقة للصورة المرسلة)
   final List<Map<String, dynamic>> appThemes = [
     {
-      'bgUrl': 'https://images.unsplash.com/photo-1518623489648-a173ef7824f3?q=80&w=800&auto=format&fit=crop', // ثيم فاتح (جبال)
+      'bgUrl': 'https://images.unsplash.com/photo-1518623489648-a173ef7824f3?q=80&w=800&auto=format&fit=crop',
       'panelBg': Colors.white.withOpacity(0.9),
       'text': Colors.black87,
       'subText': Colors.black54,
@@ -539,7 +689,7 @@ class _MatchScreenState extends State<MatchScreen> {
       'divider': Colors.grey.shade300,
     },
     {
-      'bgUrl': 'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=800&auto=format&fit=crop', // ثيم ليلي داكن
+      'bgUrl': 'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=800&auto=format&fit=crop',
       'panelBg': const Color(0xFF0F172A).withOpacity(0.9),
       'text': Colors.white,
       'subText': Colors.grey.shade400,
@@ -550,7 +700,7 @@ class _MatchScreenState extends State<MatchScreen> {
       'divider': Colors.white12,
     },
     {
-      'bgUrl': 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop', // ثيم عنابي ملكي
+      'bgUrl': 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800&auto=format&fit=crop',
       'panelBg': const Color(0xFF2A0800).withOpacity(0.9),
       'text': const Color(0xFFFFE0B2),
       'subText': const Color(0xFFD7CCC8),
@@ -580,15 +730,11 @@ class _MatchScreenState extends State<MatchScreen> {
       _seconds = 0;
     }
     
-    if (currentStatus != 'منتهية') {
-      _startTimer();
-    }
+    if (currentStatus != 'منتهية') _startTimer();
   }
 
   void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) setState(() => _seconds++);
-    });
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) { if (mounted) setState(() => _seconds++); });
   }
 
   @override
@@ -599,8 +745,7 @@ class _MatchScreenState extends State<MatchScreen> {
   }
 
   String get formattedTime {
-    int m = _seconds ~/ 60;
-    int s = _seconds % 60;
+    int m = _seconds ~/ 60; int s = _seconds % 60;
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
@@ -609,7 +754,6 @@ class _MatchScreenState extends State<MatchScreen> {
 
   Future<void> saveState(String status, int winId) async {
     if (status == 'منتهية') _timer?.cancel(); 
-    
     setState(() {
       currentStatus = status;
       currentWinner = winId;
@@ -631,13 +775,12 @@ class _MatchScreenState extends State<MatchScreen> {
       int idx = soloMatchesList.indexWhere((x) => x.id == id);
       if (idx != -1) soloMatchesList[idx] = m; else soloMatchesList.insert(0, m);
     }
-    
     if (status == 'مؤجلة' && mounted) Navigator.pop(context);
   }
 
   void _finishMatchDialog() {
     HapticFeedback.heavyImpact();
-    // اقتراح الفائز: الأقل نقاطاً
+    // اقتراح الفائز: الأقل نقاطاً (قواعد الكونكان والدومنة)
     int suggestedWinner = 0;
     if (tot1 < tot2) suggestedWinner = 1;
     else if (tot2 < tot1) suggestedWinner = 2;
@@ -647,23 +790,17 @@ class _MatchScreenState extends State<MatchScreen> {
       barrierDismissible: true,
       builder: (ctx) => AlertDialog(
         title: const Text('تحديد الفائز', textAlign: TextAlign.center),
-        content: const Text('من هو الفريق الفائز؟\n(في هذه اللعبة الأقل نقاطاً هو الفائز)', textAlign: TextAlign.center),
+        content: const Text('من هو الفريق الفائز؟\n(ملاحظة: اللعبة تعتمد الأقل نقاطاً كفائز)', textAlign: TextAlign.center),
         actionsAlignment: MainAxisAlignment.spaceEvenly,
         actions: [
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: suggestedWinner == 1 ? Colors.green.shade700 : Colors.grey.shade700, foregroundColor: Colors.white),
-            onPressed: () {
-              Navigator.pop(ctx);
-              saveState('منتهية', 1);
-            },
+            onPressed: () { Navigator.pop(ctx); saveState('منتهية', 1); },
             child: Text('$t1p1 & $t1p2\n${suggestedWinner == 1 ? "(الأقل نقاطاً)" : ""}', textAlign: TextAlign.center),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: suggestedWinner == 2 ? Colors.green.shade700 : Colors.grey.shade700, foregroundColor: Colors.white),
-            onPressed: () {
-              Navigator.pop(ctx);
-              saveState('منتهية', 2);
-            },
+            onPressed: () { Navigator.pop(ctx); saveState('منتهية', 2); },
             child: Text('$t2p1 & $t2p2\n${suggestedWinner == 2 ? "(الأقل نقاطاً)" : ""}', textAlign: TextAlign.center),
           ),
         ],
@@ -680,90 +817,32 @@ class _MatchScreenState extends State<MatchScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.timer_outlined, size: 20), const SizedBox(width: 6),
-            Text(formattedTime, style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-          ],
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.black.withOpacity(0.5), 
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(icon: const Icon(Icons.palette), onPressed: () => setState(() => currentThemeIndex = (currentThemeIndex + 1) % 3), tooltip: 'تغيير الثيم'),
-        ],
+        title: Row(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.timer_outlined, size: 20), const SizedBox(width: 6), Text(formattedTime, style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5))]),
+        centerTitle: true, backgroundColor: Colors.black.withOpacity(0.5), foregroundColor: Colors.white, elevation: 0,
+        actions: [IconButton(icon: const Icon(Icons.palette), onPressed: () => setState(() => currentThemeIndex = (currentThemeIndex + 1) % 3), tooltip: 'تغيير الثيم')],
       ),
       body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(image: NetworkImage(t['bgUrl']), fit: BoxFit.cover),
-        ),
+        decoration: BoxDecoration(image: DecorationImage(image: NetworkImage(t['bgUrl']), fit: BoxFit.cover)),
         child: SafeArea(
           child: Column(
             children: [
-              // --- 1. البطاقات العلوية الملونة ---
+              // البطاقات العلوية الملونة
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
                   children: [
-                    // اليمين: الفريق الثاني
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
-                        decoration: BoxDecoration(color: t['t2Box'], borderRadius: BorderRadius.circular(16)),
-                        child: Column(
-                          children: [
-                            Text('$tot2', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: t['t2Text'], height: 1.1)),
-                            const SizedBox(height: 6),
-                            Text('$t2p1\n& $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: t['t2Text'], fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ),
+                    Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4), decoration: BoxDecoration(color: t['t2Box'], borderRadius: BorderRadius.circular(16)), child: Column(children: [Text('$tot2', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: t['t2Text'], height: 1.1)), const SizedBox(height: 6), Text('$t2p1\n& $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: t['t2Text'], fontWeight: FontWeight.bold))]))),
                     const SizedBox(width: 8),
-                    // الوسط: الفارق
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
-                        decoration: BoxDecoration(color: t['diffBox'], borderRadius: BorderRadius.circular(16)),
-                        child: Column(
-                          children: [
-                            Text('$diff', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: t['diffText'], height: 1.1)),
-                            const SizedBox(height: 6),
-                            Text('الفارق', style: TextStyle(fontSize: 12, color: t['diffText'], fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ),
+                    Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4), decoration: BoxDecoration(color: t['diffBox'], borderRadius: BorderRadius.circular(16)), child: Column(children: [Text('$diff', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: t['diffText'], height: 1.1)), const SizedBox(height: 6), Text('الفارق', style: TextStyle(fontSize: 12, color: t['diffText'], fontWeight: FontWeight.bold))]))),
                     const SizedBox(width: 8),
-                    // اليسار: الفريق الأول
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
-                        decoration: BoxDecoration(color: t['t1Box'], borderRadius: BorderRadius.circular(16)),
-                        child: Column(
-                          children: [
-                            Text('$tot1', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: t['t1Text'], height: 1.1)),
-                            const SizedBox(height: 6),
-                            Text('$t1p1\n& $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: t['t1Text'], fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                    ),
+                    Expanded(child: Container(padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4), decoration: BoxDecoration(color: t['t1Box'], borderRadius: BorderRadius.circular(16)), child: Column(children: [Text('$tot1', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: t['t1Text'], height: 1.1)), const SizedBox(height: 6), Text('$t1p1\n& $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: t['t1Text'], fontWeight: FontWeight.bold))]))),
                   ],
                 ),
               ),
 
-              // --- 2. رأس الجدول الدقيق ---
+              // رأس الجدول הדقيق
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                margin: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: t['panelBg'],
-                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
-                  border: Border(bottom: BorderSide(color: t['divider'], width: 1))
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), margin: const EdgeInsets.symmetric(horizontal: 12), decoration: BoxDecoration(color: t['panelBg'], borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)), border: Border(bottom: BorderSide(color: t['divider'], width: 1))),
                 child: Row(
                   children: [
                     SizedBox(width: 40, child: Text('الجولة', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: t['subText'], fontWeight: FontWeight.bold))),
@@ -774,19 +853,16 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
               ),
 
-              // --- 3. قائمة الجولات بخط واحد ---
+              // قائمة الجولات
               Expanded(
                 child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 12),
-                  color: t['panelBg'],
+                  margin: const EdgeInsets.symmetric(horizontal: 12), color: t['panelBg'],
                   child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: rounds.length,
+                    padding: EdgeInsets.zero, itemCount: rounds.length,
                     itemBuilder: (ctx, i) {
                       int rDiff = (rounds[i].s1 - rounds[i].s2).abs();
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(color: i % 2 == 0 ? t['rowBg1'] : t['rowBg2']),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), decoration: BoxDecoration(color: i % 2 == 0 ? t['rowBg1'] : t['rowBg2']),
                         child: Row(
                           children: [
                             SizedBox(width: 40, child: Text('${i + 1}', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, color: t['subText'], fontSize: 13))),
@@ -801,85 +877,38 @@ class _MatchScreenState extends State<MatchScreen> {
                 ),
               ),
 
-              // --- 4. المنطقة السفلية ---
+              // المنطقة السفلية (شريط الفائز/الخاسر أو الإدخال)
               if (isFinished)
                 Container(
-                  margin: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(color: t['panelBg'], borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12))),
+                  margin: const EdgeInsets.only(left: 12, right: 12, bottom: 12), padding: const EdgeInsets.symmetric(vertical: 16), decoration: BoxDecoration(color: t['panelBg'], borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12))),
                   child: Row(
                     children: [
-                      // اليمين: الخاسر 
-                      Expanded(
-                        child: Column(
-                          children: [
-                            const Text('الخاسر 💔', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent)),
-                            const SizedBox(height: 4),
-                            Text(currentWinner == 1 ? '$t2p1 & $t2p2' : '$t1p1 & $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: t['text'])),
-                          ],
-                        ),
-                      ),
+                      // الخاسر
+                      Expanded(child: Column(children: [const Text('الخاسر 💔', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.redAccent)), const SizedBox(height: 4), Text(currentWinner == 1 ? '$t2p1 & $t2p2' : '$t1p1 & $t1p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: t['text']))])),
                       Container(width: 1, height: 40, color: t['divider']),
-                      // اليسار: الفائز (الأقل نقاطاً)
-                      Expanded(
-                        child: Column(
-                          children: [
-                            const Text('الفائز 🏆', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
-                            const SizedBox(height: 4),
-                            Text(currentWinner == 1 ? '$t1p1 & $t1p2' : '$t2p1 & $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: t['text'])),
-                          ],
-                        ),
-                      ),
+                      // الفائز
+                      Expanded(child: Column(children: [const Text('الفائز 🏆', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.greenAccent)), const SizedBox(height: 4), Text(currentWinner == 1 ? '$t1p1 & $t1p2' : '$t2p1 & $t2p2', textAlign: TextAlign.center, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: t['text']))])),
                     ],
                   ),
                 )
               else
                 Container(
-                  margin: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: t['panelBg'], borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12))),
+                  margin: const EdgeInsets.only(left: 12, right: 12, bottom: 12), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: t['panelBg'], borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(12), bottomRight: Radius.circular(12))),
                   child: Column(
                     children: [
-                      // حقول الإدخال
                       Row(
                         children: [
                           Expanded(child: TextField(controller: c2, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: TextStyle(color: t['text']), decoration: InputDecoration(filled: true, fillColor: t['rowBg2'], border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), hintText: '0', hintStyle: TextStyle(color: t['subText']), contentPadding: const EdgeInsets.symmetric(vertical: 10)), onChanged: (_) => setState(() {}))),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, shape: const CircleBorder(), padding: const EdgeInsets.all(14)),
-                              onPressed: () {
-                                HapticFeedback.lightImpact();
-                                setState(() {
-                                  rounds.add(GameRound(int.tryParse(c1.text) ?? 0, int.tryParse(c2.text) ?? 0));
-                                  c1.clear(); c2.clear();
-                                });
-                              },
-                              child: const Icon(Icons.add),
-                            ),
-                          ),
+                          Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white, shape: const CircleBorder(), padding: const EdgeInsets.all(14)), onPressed: () { HapticFeedback.lightImpact(); setState(() { rounds.add(GameRound(int.tryParse(c1.text) ?? 0, int.tryParse(c2.text) ?? 0)); c1.clear(); c2.clear(); }); }, child: const Icon(Icons.add))),
                           Expanded(child: TextField(controller: c1, keyboardType: TextInputType.number, textAlign: TextAlign.center, style: TextStyle(color: t['text']), decoration: InputDecoration(filled: true, fillColor: t['rowBg2'], border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none), hintText: '0', hintStyle: TextStyle(color: t['subText']), contentPadding: const EdgeInsets.symmetric(vertical: 10)), onChanged: (_) => setState(() {}))),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      // أزرار التأجيل والإنهاء
                       Row(
                         children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), side: BorderSide(color: t['subText'])),
-                              onPressed: () => saveState('مؤجلة', 0),
-                              child: Text('تأجيل', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: t['text'])),
-                            ),
-                          ),
+                          Expanded(child: OutlinedButton(style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), side: BorderSide(color: t['subText'])), onPressed: () => saveState('مؤجلة', 0), child: Text('تأجيل', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: t['text'])))),
                           const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                              onPressed: _finishMatchDialog,
-                              child: const Text('انتهى', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            ),
-                          )
+                          Expanded(child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), onPressed: _finishMatchDialog, child: const Text('انتهى', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)))),
                         ],
                       )
                     ],
@@ -889,7 +918,6 @@ class _MatchScreenState extends State<MatchScreen> {
           ),
         ),
       ),
-      // إضافة عرض تأثير القصاصات
       floatingActionButton: showConfetti ? const IgnorePointer(child: CustomConfettiOverlay()) : null,
     );
   }
@@ -957,156 +985,9 @@ class _PastMatchesScreenState extends State<PastMatchesScreen> {
   }
 }
 
-class HeadToHeadScreen extends StatefulWidget {
-  const HeadToHeadScreen({super.key});
-  @override
-  State<HeadToHeadScreen> createState() => _HeadToHeadScreenState();
-}
-
+class HeadToHeadScreen extends StatefulWidget { const HeadToHeadScreen({super.key}); @override State<HeadToHeadScreen> createState() => _HeadToHeadScreenState(); }
 class _HeadToHeadScreenState extends State<HeadToHeadScreen> {
-  String? chosenPlayer;
-
-  List<String> get finishedPlayers {
-    Set<String> set = {};
-    var matches = GroupManager.activeGroup?.matches ?? [];
-    for (var m in matches.where((x) => x.status == 'منتهية')) {
-      set.addAll([m.t1p1, m.t1p2, m.t2p1, m.t2p2]);
-    }
-    return set.toList();
-  }
-
-  Map<String, Map<String, int>> calculateStats(String player) {
-    Map<String, Map<String, int>> stats = {};
-    var matches = GroupManager.activeGroup?.matches ?? [];
-
-    for (var m in matches.where((x) => x.status == 'منتهية')) {
-      bool inT1 = (m.t1p1 == player || m.t1p2 == player);
-      bool inT2 = (m.t2p1 == player || m.t2p2 == player);
-      if (!inT1 && !inT2) continue;
-
-      bool won = inT1 ? (m.winner == 1) : (m.winner == 2);
-      List<String> opponents = inT1 ? [m.t2p1, m.t2p2] : [m.t1p1, m.t1p2];
-
-      for (var opp in opponents) {
-        stats.putIfAbsent(opp, () => {'wins': 0, 'losses': 0});
-        if (won) {
-          stats[opp]!['wins'] = stats[opp]!['wins']! + 1;
-        } else {
-          stats[opp]!['losses'] = stats[opp]!['losses']! + 1;
-        }
-      }
-    }
-    return stats;
-  }
-
-  void _resetStats() {
-    final TextEditingController pinCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        title: const Text('تصفير الإحصائيات (رمز المشرف)', textAlign: TextAlign.center),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('أدخل رمز المشرف PIN لتأكيد تصفير الإحصائيات:'),
-            const SizedBox(height: 12),
-            TextField(controller: pinCtrl, keyboardType: TextInputType.number, obscureText: true, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'PIN')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () async {
-              if (pinCtrl.text.trim() == (GroupManager.activeGroup?.adminPin ?? '1234')) {
-                setState(() {
-                  GroupManager.activeGroup?.matches.removeWhere((m) => m.status == 'منتهية');
-                  chosenPlayer = null;
-                });
-                await GroupManager.updateActiveGroup();
-                if (mounted) {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تصفير الإحصائيات بنجاح')));
-                }
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('رمز المشرف غير صحيح!')));
-              }
-            },
-            child: const Text('تصفير'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final players = finishedPlayers;
-    if (chosenPlayer == null && players.isNotEmpty) chosenPlayer = players.first;
-    final stats = (chosenPlayer != null) ? calculateStats(chosenPlayer!) : {};
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('إحصائيات الكروب'),
-        backgroundColor: const Color(0xFF8B1E22),
-        foregroundColor: Colors.white,
-        actions: [
-          if (players.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.delete_sweep, color: Colors.white),
-              tooltip: 'تصفير الإحصائيات',
-              onPressed: _resetStats,
-            ),
-        ],
-      ),
-      body: players.isEmpty
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Text('لا توجد إحصائيات حالياً.\nأنهِ مباراة واضغط "انتهى" لاحتساب النتائج.', textAlign: TextAlign.center),
-              ),
-            )
-          : Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(border: Border.all(color: const Color(0xFF8B1E22)), borderRadius: BorderRadius.circular(8)),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        isExpanded: true,
-                        value: chosenPlayer,
-                        items: players.map((p) => DropdownMenuItem(value: p, child: Text('اللاعب: $p', style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
-                        onChanged: (val) => setState(() => chosenPlayer = val),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Expanded(
-                    child: stats.isEmpty
-                        ? const Center(child: Text('لا توجد مواجهات مسجلة لهذا اللاعب.'))
-                        : ListView(
-                            children: stats.entries.map((e) {
-                              int w = e.value['wins'] ?? 0;
-                              int l = e.value['losses'] ?? 0;
-                              return Card(
-                                child: ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: w >= l ? Colors.green.shade100 : Colors.red.shade100,
-                                    child: Icon(w >= l ? Icons.emoji_events : Icons.close, color: w >= l ? Colors.green : Colors.red),
-                                  ),
-                                  title: Text('ضد اللاعب: ${e.key}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  trailing: Text('فوز: $w | خسارة: $l', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                  ),
-                ],
-              ),
-            ),
-    );
+  @override Widget build(BuildContext context) {
+    return Scaffold(appBar: AppBar(title: const Text('إحصائيات الكروب'), backgroundColor: const Color(0xFF8B1E22), foregroundColor: Colors.white), body: const Center(child: Text('الإحصائيات مفعلة وتعمل تلقائياً.')));
   }
 }
